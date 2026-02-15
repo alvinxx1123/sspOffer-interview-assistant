@@ -20,35 +20,16 @@
 
 ---
 
-## 一、上传到 GitHub
-
-```bash
-# 1. 在 GitHub 新建仓库（如 sspOffer-interview-assistant）
-
-# 2. 在项目根目录初始化并推送
-cd interview-assistant
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/你的用户名/sspOffer-interview-assistant.git
-git push -u origin main
-```
-
-**注意**：`application.yml` 已改为使用环境变量，不会包含你的 API Key 和密码。他人克隆后需自行配置。
-
----
-
-## 二、克隆后配置准备
+## 一、克隆后配置准备
 
 1. **克隆项目**
    ```bash
-   git clone https://github.com/你的用户名/sspOffer-interview-assistant.git
+   git clone https://github.com/alvinxx1123/sspOffer-interview-assistant.git
    cd sspOffer-interview-assistant
    ```
 
 2. **配置智谱 API Key（AI 功能必需）**（可替换）  
-   在 `src/main/resources/` 下创建 `application-local.yml`（已 gitignore）：
+   在 `src/main/resources/` 下创建 `application-local.yml`：
    
    ```yaml
    zhipu:
@@ -134,12 +115,6 @@ git push -u origin main
    systemctl enable interview-assistant
    systemctl start interview-assistant
    ```
-
-### 方式二：使用 Nginx 反向代理（绑定域名 + HTTPS）
-
-1. 安装 Nginx
-2. 配置反向代理到 8080
-3. 可选：申请 SSL 证书，配置 HTTPS
 
 ---
 
