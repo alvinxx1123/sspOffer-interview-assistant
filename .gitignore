@@ -1,0 +1,18 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.log
+.DS_Store
+.idea/
+*.iml
+
+# 本地 H2 数据文件（面经持久化目录）
+data/
+
+# 切勿提交包含 API Key 的本地配置
+application-local.yml
+.env
+.env.local
+
+frontend/node_modules/
+frontend/dist/

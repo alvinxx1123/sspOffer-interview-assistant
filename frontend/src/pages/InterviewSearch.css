@@ -1,0 +1,508 @@
+.upload-section {
+  margin-bottom: 32px;
+  padding: 20px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.upload-section h3 {
+  font-size: 1rem;
+  margin-bottom: 16px;
+}
+
+.upload-form .form-group {
+  margin-bottom: 12px;
+}
+
+.upload-form textarea {
+  resize: vertical;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.form-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-submit {
+  padding: 10px 24px;
+  font-size: 15px;
+}
+
+.btn-parse-image {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.btn-parse-image:hover {
+  border-color: var(--accent);
+  background: rgba(29, 161, 242, 0.08);
+}
+
+.btn-parse-image input {
+  display: none;
+}
+
+.btn-parse-icon {
+  font-size: 16px;
+}
+
+.upload-msg {
+  font-size: 13px;
+  color: var(--success);
+}
+
+.interview-search h1 {
+  margin-bottom: 8px;
+}
+
+.page-desc {
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+  font-size: 14px;
+}
+
+.search-form {
+  margin-bottom: 32px;
+  padding: 20px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.form-group {
+  flex: 1;
+  min-width: 150px;
+}
+
+.form-group.actions {
+  flex: 0;
+}
+
+.form-group select {
+  min-width: 120px;
+}
+
+.results {
+  margin-top: 24px;
+}
+
+.results-title {
+  font-size: 1rem;
+  margin-bottom: 16px;
+  color: var(--text-secondary);
+}
+
+.empty {
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 48px;
+}
+
+.exp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.exp-card {
+  position: relative;
+  padding: 18px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.exp-card-delete {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.exp-card-delete:hover {
+  background: rgba(244, 33, 46, 0.15);
+  color: var(--error);
+}
+
+.exp-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.exp-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-right: 36px;
+}
+
+.exp-company {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.exp-dept {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+
+.exp-type {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.exp-preview {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 10px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.exp-tags-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.exp-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: rgba(29, 161, 242, 0.15);
+  color: var(--accent);
+  border-radius: 4px;
+}
+
+.exp-tag.algo {
+  background: rgba(0, 186, 124, 0.15);
+  color: var(--success);
+}
+
+.exp-view-link {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+/* 详情弹窗 */
+.exp-detail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.exp-detail-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  max-width: 640px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  padding: 24px 32px;
+}
+
+.exp-detail-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 24px;
+  line-height: 1;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: 8px;
+}
+
+.exp-detail-close:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+.exp-detail-header {
+  margin-bottom: 24px;
+  padding-right: 48px;
+  position: relative;
+}
+
+.exp-edit-btn {
+  margin-top: 12px;
+  padding: 6px 14px;
+  font-size: 13px;
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.exp-edit-btn:hover {
+  background: rgba(29, 161, 242, 0.1);
+}
+
+.exp-edit-hint {
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--text-secondary);
+}
+
+.exp-detail-header h2 {
+  font-size: 1.25rem;
+  margin-bottom: 6px;
+}
+
+.exp-meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.exp-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.exp-section h4 {
+  font-size: 14px;
+  color: var(--accent);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.exp-section-content {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+
+.exp-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.exp-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.exp-detail-tag {
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.exp-detail-tag.llm {
+  background: rgba(138, 43, 226, 0.15);
+  color: #b794f6;
+}
+
+.exp-detail-tag.algo {
+  background: rgba(0, 186, 124, 0.15);
+  color: var(--success);
+}
+
+.exp-algo-tag {
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.exp-algo-tag:hover {
+  background: rgba(0, 186, 124, 0.25);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.exp-algo-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+/* 八股 Q&A 编辑 */
+.bagu-qa-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bagu-qa-item {
+  padding: 12px;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.bagu-qa-q label,
+.bagu-qa-a label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.bagu-qa-q input,
+.bagu-qa-a textarea {
+  margin-top: 4px;
+}
+
+.bagu-qa-remove {
+  margin-top: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--error);
+  border: 1px solid var(--error);
+}
+
+.bagu-qa-remove:hover {
+  background: rgba(244, 33, 46, 0.1);
+}
+
+.exp-edit-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* 八股 Q&A 查看 */
+.bagu-qa-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bagu-qa-row {
+  padding: 12px;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  border-left: 3px solid var(--accent);
+}
+
+.bagu-q {
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.bagu-a {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+
+.badge {
+  padding: 4px 10px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.badge.source {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.multi-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: flex-start;
+}
+.multi-row textarea {
+  flex: 1;
+}
+
+.algo-multi-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.algo-multi-row input:first-of-type {
+  flex: 1;
+  min-width: 120px;
+}
+.algo-multi-row input:nth-of-type(2) {
+  flex: 1;
+  min-width: 180px;
+}
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 0;
+}
+.btn-link:hover {
+  text-decoration: underline;
+}
+.algo-link {
+  margin-left: 8px;
+  color: var(--primary);
+}
+.mt-1 { margin-top: 8px; display: block; width: 100%; }

@@ -1,0 +1,73 @@
+
+
+  VITE v5.4.21  ready in 125 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help
+7:21:32 PM [vite] http proxy error: /api/resumes
+Error: connect ECONNREFUSED 127.0.0.1:8080
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1713:16)
+7:21:32 PM [vite] http proxy error: /api/applications
+Error: connect ECONNREFUSED 127.0.0.1:8080
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1713:16)
+7:21:32 PM [vite] http proxy error: /api/resumes
+Error: connect ECONNREFUSED 127.0.0.1:8080
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1713:16)
+7:21:32 PM [vite] http proxy error: /api/applications
+Error: connect ECONNREFUSED 127.0.0.1:8080
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1713:16)
+7:22:24 PM [vite] http proxy error: /api/replay/records
+Error: connect ECONNREFUSED 127.0.0.1:8080
+    at TCPConnectWrap.onnect [as oncomplete] (node:net:1713:16)
+7:22:24 PM [vite] http proxy error: /api/replay/records
+Error: connect ECONNREFUSED 127.0.0.1:8080
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1713:16)
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1713:16) (x2)
+7:39:07 PM [vite] hmr update /src/components/Layout.jsx
+7:39:58 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pag
+7:39:58 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /s
+7:39:58 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /src/pages/OnlineIDE.jsx
+7:40:22 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pag
+7:40:22 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /s
+7:40:22 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /src/pages/OnlineIDE.jsx (x2)
+7:40:30 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pag
+7:40:30 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /s
+7:40:30 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /src/pages/OnlineIDE.jsx (x3)
+7:40:33 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pag
+7:40:33 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /s
+7:40:33 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /src/pages/OnlineIDE.jsx (x4)
+7:40:40 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pag
+7:40:40 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /s
+7:40:40 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /src/pages/OnlineIDE.jsx (x5)
+7:40:43 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pag
+7:40:43 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /s
+7:40:43 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /src/pages/OnlineIDE.jsx (x6)
+7:40:49 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pag
+7:40:49 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /s
+7:40:49 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /src/pages/OnlineIDE.jsx (x7)
+7:40:50 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pag
+7:40:50 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /s
+7:40:50 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /src/pages/OnlineIDE.jsx (x8)
+7:40:56 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pag
+7:40:56 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /s
+7:40:56 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /src/pages/OnlineIDE.jsx (x9)
+7:41:03 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pag
+7:41:03 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /s
+7:41:03 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /src/pages/OnlineIDE.jsx (x10)
+7:41:07 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pag
+7:41:07 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /s
+7:41:07 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /src/pages/OnlineIDE.jsx (x11)
+7:41:23 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pag
+7:41:23 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /s
+7:41:23 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /src/pages/OnlineIDE.jsx (x12)
+7:41:39 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pag
+7:41:39 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /s
+7:41:39 PM [vite] hmr update /src/pages/InterviewSearch.jsx, /src/pages/Replay.jsx, /src/pages/AIInterview.jsx, /src/pages/Resumes.jsx, /src/pages/OnlineIDE.jsx (x13)
+7:47:07 PM [vite] hmr update /src/pages/Home.jsx
+[Proxy] DELETE /api/replay/records/6 -> 403
+[Proxy] DELETE /api/replay/records/6 -> 403
+[Proxy] DELETE /api/applications/1 -> 403
+[Proxy] POST /api/applications -> 403
+[Proxy] DELETE /api/applications/4 -> 403
+[Proxy] DELETE /api/applications/4 -> 403

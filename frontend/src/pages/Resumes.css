@@ -1,0 +1,196 @@
+.resumes h1 {
+  margin-bottom: 8px;
+}
+
+.page-desc {
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+
+.upload-section {
+  margin-bottom: 24px;
+}
+
+.upload-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.upload-zone:hover {
+  border-color: var(--primary);
+}
+
+.upload-zone input {
+  display: none;
+}
+
+.upload-icon {
+  font-size: 24px;
+}
+
+.upload-text {
+  color: var(--text-secondary);
+}
+
+.resume-list {
+  margin-top: 24px;
+  padding: 20px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.resume-list h3 {
+  font-size: 14px;
+  margin-bottom: 16px;
+  color: var(--text-secondary);
+}
+
+.resume-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.resume-card:last-child {
+  margin-bottom: 0;
+}
+
+.resume-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.resume-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.resume-time {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.card-actions .btn-sm {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.btn-small {
+  padding: 4px 12px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-small:hover {
+  color: var(--error);
+}
+
+.card-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.section {
+  margin-bottom: 40px;
+}
+
+.section h2 {
+  font-size: 1.1rem;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.app-form,
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.app-form .form-group {
+  min-width: 140px;
+  flex: 1;
+}
+
+.app-form .form-group-flex {
+  flex: 2;
+  min-width: 200px;
+}
+
+.app-form .form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.app-list {
+  margin-top: 20px;
+  padding: 20px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.app-list h3 {
+  font-size: 14px;
+  margin-bottom: 16px;
+  color: var(--text-secondary);
+}
+
+.app-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.app-card:last-child {
+  margin-bottom: 0;
+}
+
+.app-card.editing {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.3);
+}
+
+.app-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app-company {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.app-meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+}

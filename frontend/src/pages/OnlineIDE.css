@@ -1,0 +1,253 @@
+.online-ide h1 {
+  margin-bottom: 8px;
+}
+
+.ide-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 24px;
+  min-height: 600px;
+}
+
+@media (max-width: 768px) {
+  .ide-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.question-list {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.question-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.question-list-header h3 {
+  font-size: 14px;
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.btn-add-question {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-add-question:hover {
+  opacity: 0.9;
+}
+
+.question-list ul {
+  list-style: none;
+}
+
+.question-list li {
+  margin-bottom: 4px;
+}
+
+.question-list li button {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  position: relative;
+}
+
+.question-list li .q-delete {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: auto;
+  padding: 2px 8px;
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+.question-list li .q-delete:hover {
+  color: var(--error);
+}
+
+.question-list li button:hover {
+  background: var(--bg-tertiary);
+}
+
+.question-list li button.active {
+  background: rgba(29, 161, 242, 0.2);
+  border-color: var(--accent);
+}
+
+.question-list .title {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.question-list .badge.diff {
+  font-size: 11px;
+  padding: 2px 6px;
+}
+
+.question-list .leetcode-link {
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+.question-list .empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.editor-area {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.question-info {
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.question-info h3 {
+  font-size: 1rem;
+  margin-bottom: 8px;
+}
+
+.question-info p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.leetcode-btn {
+  font-size: 13px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbar select {
+  width: auto;
+  min-width: 100px;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.editor-container {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.stdin-section label,
+.output-section h4 {
+  font-size: 13px;
+  margin-bottom: 8px;
+  display: block;
+  color: var(--text-secondary);
+}
+
+.stdin-section textarea {
+  width: 100%;
+  font-family: monospace;
+  font-size: 13px;
+}
+
+.output-section {
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.output-pre {
+  font-family: monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  min-height: 60px;
+}
+
+.output-pre .stderr {
+  color: var(--error);
+}
+
+.output-pre .placeholder {
+  color: var(--text-secondary);
+}
+
+.exit-code {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.add-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+
+.add-modal-content {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 24px;
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.add-modal-content h3 {
+  margin: 0 0 20px;
+}
+
+.add-modal-content .form-group {
+  margin-bottom: 16px;
+}
+
+.add-modal-content .form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.add-modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
