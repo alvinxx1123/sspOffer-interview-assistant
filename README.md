@@ -1,4 +1,4 @@
-![sspOffer Logo](logo.png)
+<img src="logo.png" alt="sspOffer Logo" width="50%">
 # sspOffer面经助手 - 互联网面试准备平台
 
 基于 LangChain4j 的面经整合与 AI 面试准备应用。支持面经搜索、AI 面试模拟、面试复盘、在线算法 IDE。
