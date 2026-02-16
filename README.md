@@ -49,7 +49,7 @@
 4. **启动**
    ```bash
    # 后端
-   ./mvnw spring-boot:run
+   ./mvn spring-boot:run
    
    # 前端（另一终端）
    cd frontend
@@ -134,7 +134,7 @@ zhipu:
 
 ```bash
 # 后端
-./mvnw spring-boot:run
+./mvn spring-boot:run
 
 # 前端
 cd frontend && npm install && npm run dev
