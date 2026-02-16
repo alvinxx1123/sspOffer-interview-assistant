@@ -66,20 +66,28 @@ export default function Resumes() {
     }
   }
 
-  const download = (r) => {
+  const download = async (r) => {
     if (!r.fileName && !r.fileData) {
       alert('该简历无文件，无法下载')
       return
     }
-    window.open(api.getResumeDownloadUrl(r.id), '_blank')
+    try {
+      await api.downloadResume(r.id)
+    } catch (e) {
+      alert(e?.message || '下载失败')
+    }
   }
 
-  const preview = (r) => {
+  const preview = async (r) => {
     if (!r.fileName && !r.fileData) {
       alert('该简历无文件，无法预览')
       return
     }
-    window.open(api.getResumePreviewUrl(r.id), '_blank')
+    try {
+      await api.previewResume(r.id)
+    } catch (e) {
+      alert(e?.message || '预览失败')
+    }
   }
 
   const removeResume = async (id) => {

@@ -14,5 +14,9 @@ application-local.yml
 .env
 .env.local
 
+# 本地保留，推送时不上传（含密钥与密码）
+src/main/resources/application.yml
+README.md
+
 frontend/node_modules/
 frontend/dist/

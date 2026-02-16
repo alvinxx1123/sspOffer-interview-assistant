@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Editor from '@monaco-editor/react'
 import { api } from '../api/client'
 import './OnlineIDE.css'
@@ -34,6 +34,8 @@ export default function OnlineIDE() {
   const [language, setLanguage] = useState('python')
   const [code, setCode] = useState('')
   const [output, setOutput] = useState({ stdout: '', stderr: '', exitCode: 0 })
+  const [hasRunOnce, setHasRunOnce] = useState(false)
+  const outputSectionRef = useRef(null)
   const [running, setRunning] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [addError, setAddError] = useState('')
@@ -77,9 +79,14 @@ export default function OnlineIDE() {
         exitCode: result.exitCode ?? -1,
       })
     } catch (e) {
-      setOutput({ stdout: '', stderr: '执行失败: ' + e.message, exitCode: -1 })
+      const msg = (e && e.message === 'Failed to fetch')
+        ? '请求超时或网络异常，请确认代码执行服务(Piston)已启动且后端可访问。'
+        : ('执行失败: ' + (e && e.message ? e.message : '未知错误'))
+      setOutput({ stdout: '', stderr: msg, exitCode: -1 })
     } finally {
       setRunning(false)
+      setHasRunOnce(true)
+      setTimeout(() => outputSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50)
     }
   }
 
@@ -220,6 +227,7 @@ export default function OnlineIDE() {
             </div>
           )}
 
+          <p className="editor-hint">在此编写代码与自测用例，点击「运行」查看输出；题库仅作题目列表与跳转。</p>
           <div className="toolbar">
             <select value={language} onChange={(e) => setLanguage(e.target.value)}>
               {LANGUAGES.map((l) => (
@@ -249,12 +257,16 @@ export default function OnlineIDE() {
             />
           </div>
 
-          <div className="output-section">
+          <div className="output-section" ref={outputSectionRef}>
             <h4>输出</h4>
             <pre className="output-pre">
               {output.stdout}
               {output.stderr && <span className="stderr">{output.stderr}</span>}
-              {!output.stdout && !output.stderr && <span className="placeholder">运行后显示结果</span>}
+              {!output.stdout && !output.stderr && (
+                <span className="placeholder">
+                  {hasRunOnce ? '运行完成。（程序未产生标准输出；若应有输出却为空，请检查代码执行服务 Piston 是否已启动）' : '运行后显示结果'}
+                </span>
+              )}
             </pre>
             {output.exitCode !== undefined && output.exitCode !== 0 && (
               <span className="exit-code">退出码: {output.exitCode}</span>

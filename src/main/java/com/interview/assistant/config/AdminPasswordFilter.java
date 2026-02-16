@@ -49,8 +49,11 @@ public class AdminPasswordFilter extends OncePerRequestFilter {
             chain.doFilter(request, response);
             return;
         }
-        if (!"POST".equalsIgnoreCase(method) && !"PUT".equalsIgnoreCase(method)
-                && !"DELETE".equalsIgnoreCase(method) && !"PATCH".equalsIgnoreCase(method)) {
+        // 简历相关接口（含 GET 列表/详情/下载/预览）均需管理员密码，防止他人查看或下载
+        boolean isResumeApi = path.startsWith("/api/resumes");
+        boolean isModify = "POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)
+                || "DELETE".equalsIgnoreCase(method) || "PATCH".equalsIgnoreCase(method);
+        if (!isModify && !isResumeApi) {
             chain.doFilter(request, response);
             return;
         }

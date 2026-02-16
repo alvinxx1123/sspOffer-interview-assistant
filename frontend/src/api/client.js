@@ -26,7 +26,7 @@ async function doFetch(url, options, isModify) {
   return res
 }
 
-async function request(path, options = {}) {
+async function request(path, options = {}, requireAuth = false) {
   const method = (options.method || 'GET').toUpperCase()
   const isModify = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)
   const base = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE
@@ -35,7 +35,7 @@ async function request(path, options = {}) {
     headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
   }
-  const res = await doFetch(url, opts, isModify)
+  const res = await doFetch(url, opts, isModify || requireAuth)
   if (!res.ok) {
     let msg = res.statusText
     try {
@@ -273,13 +273,51 @@ export const api = {
     }
     return res.json()
   },
-  getResumeDownloadUrl: (id) => {
+  /** 带管理员密码下载简历（他人无法直接通过 URL 下载） */
+  downloadResume: async (id) => {
     const base = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE
-    return base.startsWith('http') ? `${base}/resumes/${id}/download` : `${window.location.origin}${base}/resumes/${id}/download`
+    const url = base.startsWith('http') ? `${base}/resumes/${id}/download` : `${window.location.origin}${base}/resumes/${id}/download`
+    const p = getPassword()
+    let opts = { method: 'GET', headers: p ? { 'X-Admin-Password': p } : {} }
+    let res = await doFetch(url, opts, true)
+    if (res.status === 403) {
+      clearPassword()
+      const pw = await getPasswordAsync()
+      if (!pw) throw new Error('需要管理员密码')
+      res = await doFetch(url, { method: 'GET', headers: { 'X-Admin-Password': pw } }, true)
+      if (res.status === 403) { clearPassword(); throw new Error('密码错误，请重试') }
+      if (pw) setPassword(pw)
+    }
+    if (!res.ok) throw new Error(res.statusText)
+    const blob = await res.blob()
+    const disp = res.headers.get('Content-Disposition') || ''
+    const m = disp.match(/filename\*?=(?:UTF-8'')?([^;\s]+)/i)
+    const name = m ? decodeURIComponent(m[1].replace(/^"|"$/g, '')) : 'resume.pdf'
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = decodeURIComponent(name)
+    a.click()
+    URL.revokeObjectURL(a.href)
   },
-  getResumePreviewUrl: (id) => {
+  /** 带管理员密码预览简历（他人无法直接通过 URL 预览） */
+  previewResume: async (id) => {
     const base = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE
-    return base.startsWith('http') ? `${base}/resumes/${id}/preview` : `${window.location.origin}${base}/resumes/${id}/preview`
+    const url = base.startsWith('http') ? `${base}/resumes/${id}/preview` : `${window.location.origin}${base}/resumes/${id}/preview`
+    const p = getPassword()
+    let opts = { method: 'GET', headers: p ? { 'X-Admin-Password': p } : {} }
+    let res = await doFetch(url, opts, true)
+    if (res.status === 403) {
+      clearPassword()
+      const pw = await getPasswordAsync()
+      if (!pw) throw new Error('需要管理员密码')
+      res = await doFetch(url, { method: 'GET', headers: { 'X-Admin-Password': pw } }, true)
+      if (res.status === 403) { clearPassword(); throw new Error('密码错误，请重试') }
+      if (pw) setPassword(pw)
+    }
+    if (!res.ok) throw new Error(res.statusText)
+    const blob = await res.blob()
+    const u = URL.createObjectURL(blob)
+    window.open(u, '_blank')
   },
   parseResume: async (file) => {
     const base = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE
@@ -308,8 +346,8 @@ export const api = {
     }
     return res.json()
   },
-  getResumes: () => request('/resumes'),
-  getResume: (id) => request(`/resumes/${id}`),
+  getResumes: () => request('/resumes', {}, true),
+  getResume: (id) => request(`/resumes/${id}`, {}, true),
   deleteResume: (id) =>
     request(`/resumes/${id}`, { method: 'DELETE' }),
 

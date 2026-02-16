@@ -9,6 +9,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -21,6 +22,8 @@ public class CodeExecutionService {
 
     @Value("${piston.api-url:https://emkc.org/api/v2/piston}")
     private String pistonApiUrl;
+    @Value("${piston.timeout-seconds:30}")
+    private int pistonTimeoutSeconds;
 
     private final WebClient.Builder webClientBuilder;
 
@@ -38,11 +41,15 @@ public class CodeExecutionService {
     );
 
     public ExecutionResult execute(String language, String code, String stdin, boolean acmMode) {
+        String baseUrl = (pistonApiUrl != null && !pistonApiUrl.isBlank()) ? pistonApiUrl.trim() : "https://emkc.org/api/v2/piston";
+        if (pistonApiUrl == null || pistonApiUrl.isBlank()) {
+            log.warn("piston.api-url 未配置，使用默认公网地址。自建 Piston 请在 application.yml 或环境变量 PISTON_API_URL 中配置");
+        }
         String pistonLang = LANGUAGE_MAP.getOrDefault(language.toLowerCase(), language.toLowerCase());
         String version = getDefaultVersion(pistonLang);
 
         try {
-            WebClient client = webClientBuilder.baseUrl(pistonApiUrl).build();
+            WebClient client = webClientBuilder.baseUrl(baseUrl).build();
 
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("language", pistonLang);
@@ -76,7 +83,7 @@ public class CodeExecutionService {
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block(Duration.ofSeconds(Math.max(10, pistonTimeoutSeconds)));
 
             JsonNode node = objectMapper.readTree(response);
             String stdout = node.has("run") && node.get("run").has("stdout")
