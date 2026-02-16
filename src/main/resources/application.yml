@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: interview-assistant
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 10MB
+  datasource:
+    # 文件库：数据持久化到 ./data/interviewdb，重启不丢失（可改为绝对路径）
+    url: jdbc:h2:file:./data/interviewdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  h2:
+    console:
+      enabled: true
+  jpa:
+    hibernate:
+      # update: 保留表和数据；首次启动建表，后续只做 schema 变更
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+
+# 智谱 GLM 配置：设置环境变量 ZHIPU_API_KEY 或在本机 application-local.yml 填写（勿提交密钥）
+zhipu:
+  apiKey: ""
+  # 主模型（对话、复盘等）: glm-4-flash, glm-4, glm-4.6v, glm-4.6v-flash 等
+  model: glm-4.6v
+  # 深挖问题生成专用：更快模型提速
+  questionModel: glm-4-flash
+  # 面试对话/答疑专用：更快模型 + 更高 token 避免截断
+  chatModel: glm-4-flash
+  # 图片解析用的视觉模型（glm-4v-flash 不支持 Base64，需用 glm-4v-plus 或 glm-4.6v）
+  visionModel: glm-4v-plus
+  # 复盘专用：纯文本分析，用 flash 提速（不要用 glm-4.6v 等多模态慢模型）
+  replayModel: glm-4-flash
+
+# Piston 代码执行 API
+piston:
+  api-url: https://emkc.org/api/v2/piston
+
+# 管理员密码：设置环境变量 APP_ADMIN_PASSWORD 或在本机 application-local.yml 填写；未配置则不校验
+app:
+  admin-password: ""
+
+server:
+  port: 8080
