@@ -31,6 +31,12 @@ public class AlgorithmQuestion {
 
     private String leetcodeSlug;
 
+    /** 原题链接（可选） */
+    private String originalLink;
+
+    /** 原题出处标签，可自定义如：力扣、牛客 */
+    private String source;
+
     private String defaultCode;
 
     private String testCases;
@@ -38,6 +44,9 @@ public class AlgorithmQuestion {
     private LocalDateTime createdAt = LocalDateTime.now();
 
     public String getLeetcodeUrl() {
+        if (originalLink != null && !originalLink.isBlank()) {
+            return originalLink.trim();
+        }
         if (leetcodeSlug != null && !leetcodeSlug.isEmpty()) {
             return "https://leetcode.cn/problems/" + leetcodeSlug + "/";
         }
@@ -63,6 +72,10 @@ public class AlgorithmQuestion {
     public void setLeetcodeProblemId(Integer leetcodeProblemId) { this.leetcodeProblemId = leetcodeProblemId; }
     public String getLeetcodeSlug() { return leetcodeSlug; }
     public void setLeetcodeSlug(String leetcodeSlug) { this.leetcodeSlug = leetcodeSlug; }
+    public String getOriginalLink() { return originalLink; }
+    public void setOriginalLink(String originalLink) { this.originalLink = originalLink; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
     public String getDefaultCode() { return defaultCode; }
     public void setDefaultCode(String defaultCode) { this.defaultCode = defaultCode; }
     public String getTestCases() { return testCases; }

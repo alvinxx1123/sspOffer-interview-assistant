@@ -3,7 +3,11 @@ import Editor from '@monaco-editor/react'
 import { api } from '../api/client'
 import './OnlineIDE.css'
 
-const DIFFICULTIES = ['简单', '中等', '困难']
+const DIFFICULTIES = ['easy', 'medium', 'hard']
+const DIFFICULTY_MAP = { '简单': 'easy', '中等': 'medium', '困难': 'hard' }
+function normalizeDifficulty(d) {
+  return (d && DIFFICULTY_MAP[d]) || d || 'medium'
+}
 
 const LANGUAGES = [
   { id: 'python', name: 'Python' },
@@ -32,9 +36,16 @@ export default function OnlineIDE() {
   const [output, setOutput] = useState({ stdout: '', stderr: '', exitCode: 0 })
   const [running, setRunning] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [addError, setAddError] = useState('')
   const [addForm, setAddForm] = useState({
-    title: '', description: '', difficulty: '中等',
-    leetcodeSlug: '', defaultCode: '', testCases: '',
+    title: '', description: '', difficulty: 'medium',
+    leetcodeSlug: '', originalLink: '', source: '', defaultCode: '',
+  })
+  const [editingQuestion, setEditingQuestion] = useState(null)
+  const [editError, setEditError] = useState('')
+  const [editForm, setEditForm] = useState({
+    title: '', description: '', difficulty: 'medium',
+    leetcodeSlug: '', originalLink: '', source: '', defaultCode: '',
   })
 
   const loadQuestions = () => api.getAlgorithms().then(setQuestions).catch(console.error)
@@ -77,19 +88,61 @@ export default function OnlineIDE() {
   const submitAdd = async (e) => {
     e.preventDefault()
     if (!addForm.title?.trim() || !addForm.description?.trim()) return
+    setAddError('')
     try {
       await api.createAlgorithm({
         title: addForm.title.trim(),
         description: addForm.description.trim(),
         difficulty: addForm.difficulty || null,
         leetcodeSlug: addForm.leetcodeSlug?.trim() || null,
+        originalLink: addForm.originalLink?.trim() || null,
+        source: addForm.source?.trim() || null,
         defaultCode: addForm.defaultCode?.trim() || null,
-        testCases: addForm.testCases?.trim() || null,
       })
       setShowAddModal(false)
-      setAddForm({ title: '', description: '', difficulty: '中等', leetcodeSlug: '', defaultCode: '', testCases: '' })
+      setAddForm({ title: '', description: '', difficulty: 'medium', leetcodeSlug: '', originalLink: '', source: '', defaultCode: '' })
       loadQuestions()
     } catch (err) {
+      setAddError(err?.message || '添加失败，请重试')
+      console.error(err)
+    }
+  }
+
+  const openEdit = (e, q) => {
+    e.stopPropagation()
+    setEditingQuestion(q)
+    setEditForm({
+      title: q.title || '',
+      description: q.description || '',
+      difficulty: normalizeDifficulty(q.difficulty),
+      leetcodeSlug: q.leetcodeSlug || '',
+      originalLink: q.originalLink || '',
+      source: q.source || '',
+      defaultCode: q.defaultCode || '',
+    })
+    setEditError('')
+  }
+
+  const submitEdit = async (e) => {
+    e.preventDefault()
+    if (!editingQuestion || !editForm.title?.trim() || !editForm.description?.trim()) return
+    setEditError('')
+    try {
+      const updated = await api.updateAlgorithm(editingQuestion.id, {
+        ...editingQuestion,
+        title: editForm.title.trim(),
+        description: editForm.description.trim(),
+        difficulty: editForm.difficulty || null,
+        leetcodeSlug: editForm.leetcodeSlug?.trim() || null,
+        originalLink: editForm.originalLink?.trim() || null,
+        source: editForm.source?.trim() || null,
+        defaultCode: editForm.defaultCode?.trim() || null,
+      })
+      setEditingQuestion(null)
+      if (selectedQuestion?.id === editingQuestion.id) setSelectedQuestion(updated)
+      loadQuestions()
+    } catch (err) {
+      setEditError(err?.message || '保存失败，请重试')
       console.error(err)
     }
   }
@@ -128,18 +181,19 @@ export default function OnlineIDE() {
                   onClick={() => setSelectedQuestion(q)}
                 >
                   <span className="title">{q.title}</span>
-                  <span className="badge diff">{q.difficulty}</span>
-                  {q.leetcodeSlug && (
+                  <span className="badge diff">{normalizeDifficulty(q.difficulty) || q.difficulty}</span>
+                  {(q.leetcodeUrl || q.originalLink || q.leetcodeSlug) && (
                     <a
-                      href={q.leetcodeUrl || `https://leetcode.cn/problems/${q.leetcodeSlug}/`}
+                      href={q.leetcodeUrl || q.originalLink || (q.leetcodeSlug ? `https://leetcode.cn/problems/${q.leetcodeSlug}/` : null) || '#'}
                       target="_blank"
                       rel="noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="leetcode-link"
+                      className="source-link"
                     >
-                     力扣
+                      {q.source?.trim() || '原题'}
                     </a>
                   )}
+                  <button type="button" className="q-edit" onClick={(e) => openEdit(e, q)} title="编辑">✎</button>
                   <button type="button" className="q-delete" onClick={(e) => deleteQuestion(e, q)} title="删除">×</button>
                 </button>
               </li>
@@ -153,14 +207,14 @@ export default function OnlineIDE() {
             <div className="question-info">
               <h3>{selectedQuestion.title}</h3>
               <p>{selectedQuestion.description}</p>
-              {(selectedQuestion.leetcodeUrl || selectedQuestion.leetcodeSlug) && (
+              {(selectedQuestion.leetcodeUrl || selectedQuestion.originalLink || selectedQuestion.leetcodeSlug) && (
                 <a
-                  href={selectedQuestion.leetcodeUrl || `https://leetcode.cn/problems/${selectedQuestion.leetcodeSlug}/`}
+                  href={selectedQuestion.leetcodeUrl || selectedQuestion.originalLink || (selectedQuestion.leetcodeSlug ? `https://leetcode.cn/problems/${selectedQuestion.leetcodeSlug}/` : null) || '#'}
                   target="_blank"
                   rel="noreferrer"
                   className="leetcode-btn"
                 >
-                  🔗 力扣原题
+                  🔗 {selectedQuestion.source?.trim() ? `${selectedQuestion.source}原题` : '原题链接'}
                 </a>
               )}
             </div>
@@ -210,9 +264,10 @@ export default function OnlineIDE() {
       </div>
 
       {showAddModal && (
-        <div className="add-modal" onClick={() => setShowAddModal(false)}>
+        <div className="add-modal" onClick={() => { setShowAddModal(false); setAddError('') }}>
           <div className="add-modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>添加算法题</h3>
+            {addError && <p className="add-modal-error">{addError}</p>}
             <form onSubmit={submitAdd}>
               <div className="form-group">
                 <label>题目 *</label>
@@ -230,19 +285,68 @@ export default function OnlineIDE() {
               </div>
               <div className="form-group">
                 <label>力扣 slug</label>
-                <input value={addForm.leetcodeSlug} onChange={(e) => setAddForm(f => ({ ...f, leetcodeSlug: e.target.value }))} placeholder="如：two-sum" />
+                <input value={addForm.leetcodeSlug} onChange={(e) => setAddForm(f => ({ ...f, leetcodeSlug: e.target.value }))} placeholder="如：two-sum（与下方二选一）" />
+              </div>
+              <div className="form-group">
+                <label>原题链接</label>
+                <input type="url" value={addForm.originalLink} onChange={(e) => setAddForm(f => ({ ...f, originalLink: e.target.value }))} placeholder="如：https://leetcode.cn/problems/two-sum/" />
+              </div>
+              <div className="form-group">
+                <label>原题出处</label>
+                <input value={addForm.source} onChange={(e) => setAddForm(f => ({ ...f, source: e.target.value }))} placeholder="如：力扣、牛客（与链接对应）" />
               </div>
               <div className="form-group">
                 <label>默认代码</label>
                 <textarea value={addForm.defaultCode} onChange={(e) => setAddForm(f => ({ ...f, defaultCode: e.target.value }))} rows={4} placeholder="留空即为白板，用户自行编写" />
               </div>
-              <div className="form-group">
-                <label>测试用例 (stdin)</label>
-                <textarea value={addForm.testCases} onChange={(e) => setAddForm(f => ({ ...f, testCases: e.target.value }))} rows={3} placeholder="留空则由用户自行输入测试" />
-              </div>
               <div className="add-modal-actions">
                 <button type="button" className="btn-secondary" onClick={() => setShowAddModal(false)}>取消</button>
                 <button type="submit" className="btn-primary">添加</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingQuestion && (
+        <div className="add-modal" onClick={() => { setEditingQuestion(null); setEditError('') }}>
+          <div className="add-modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>编辑算法题</h3>
+            {editError && <p className="add-modal-error">{editError}</p>}
+            <form onSubmit={submitEdit}>
+              <div className="form-group">
+                <label>题目 *</label>
+                <input value={editForm.title} onChange={(e) => setEditForm(f => ({ ...f, title: e.target.value }))} placeholder="如：两数之和" required />
+              </div>
+              <div className="form-group">
+                <label>描述 *</label>
+                <textarea value={editForm.description} onChange={(e) => setEditForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="题目描述" required />
+              </div>
+              <div className="form-group">
+                <label>难度</label>
+                <select value={editForm.difficulty} onChange={(e) => setEditForm(f => ({ ...f, difficulty: e.target.value }))}>
+                  {DIFFICULTIES.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>力扣 slug</label>
+                <input value={editForm.leetcodeSlug} onChange={(e) => setEditForm(f => ({ ...f, leetcodeSlug: e.target.value }))} placeholder="如：two-sum（与下方二选一）" />
+              </div>
+              <div className="form-group">
+                <label>原题链接</label>
+                <input type="url" value={editForm.originalLink} onChange={(e) => setEditForm(f => ({ ...f, originalLink: e.target.value }))} placeholder="如：https://leetcode.cn/problems/two-sum/" />
+              </div>
+              <div className="form-group">
+                <label>原题出处</label>
+                <input value={editForm.source} onChange={(e) => setEditForm(f => ({ ...f, source: e.target.value }))} placeholder="如：力扣、牛客（与链接对应）" />
+              </div>
+              <div className="form-group">
+                <label>默认代码</label>
+                <textarea value={editForm.defaultCode} onChange={(e) => setEditForm(f => ({ ...f, defaultCode: e.target.value }))} rows={4} placeholder="留空即为白板，用户自行编写" />
+              </div>
+              <div className="add-modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => { setEditingQuestion(null); setEditError('') }}>取消</button>
+                <button type="submit" className="btn-primary">保存</button>
               </div>
             </form>
           </div>

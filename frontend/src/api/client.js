@@ -1,24 +1,27 @@
 // 开发时若代理 404，可设置 VITE_API_BASE=http://127.0.0.1:8080/api 直接连后端
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
-import { getPassword, getPasswordAsync, clearPassword } from '../utils/adminAuth'
+import { getPassword, getPasswordAsync, clearPassword, setPassword } from '../utils/adminAuth'
 
 async function doFetch(url, options, isModify) {
+  let reqOpts = options
   if (isModify) {
     const p = getPassword()
-    if (p) options.headers = { ...options.headers, 'X-Admin-Password': p }
+    if (p) reqOpts = { ...options, headers: { ...(options.headers || {}), 'X-Admin-Password': p } }
   }
-  let res = await fetch(url, options)
+  let res = await fetch(url, reqOpts)
   if (isModify && res.status === 403) {
     clearPassword()
     const p = await getPasswordAsync()
     if (!p) throw new Error('需要管理员密码')
-    options.headers = { ...options.headers, 'X-Admin-Password': p }
-    res = await fetch(url, options)
+    // 重试时使用新对象并显式带上密码头，避免部分环境未正确发送自定义 header
+    const retryOpts = { ...options, headers: { ...(options.headers || {}), 'X-Admin-Password': p } }
+    res = await fetch(url, retryOpts)
     if (res.status === 403) {
       clearPassword()
       throw new Error('密码错误，请重试')
     }
+    if (p) setPassword(p)
   }
   return res
 }
@@ -245,6 +248,11 @@ export const api = {
   createAlgorithm: (question) =>
     request('/algorithms', {
       method: 'POST',
+      body: JSON.stringify(question),
+    }),
+  updateAlgorithm: (id, question) =>
+    request(`/algorithms/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(question),
     }),
   deleteAlgorithm: (id) =>

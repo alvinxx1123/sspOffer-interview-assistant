@@ -114,6 +114,7 @@ public class DataLoader implements CommandLineRunner {
         a.setDepartment(dept);
         a.setLeetcodeProblemId(leetcodeId);
         a.setLeetcodeSlug(slug);
+        a.setSource("力扣");
         a.setDefaultCode(defaultCode);
         a.setTestCases(testCases);
         return a;

@@ -54,6 +54,15 @@ public class AlgorithmController {
         return ResponseEntity.ok(questionRepository.save(question));
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<AlgorithmQuestion> update(@PathVariable Long id, @RequestBody AlgorithmQuestion question) {
+        if (!questionRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        question.setId(id);
+        return ResponseEntity.ok(questionRepository.save(question));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         questionRepository.deleteById(id);

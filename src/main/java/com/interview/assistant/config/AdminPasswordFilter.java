@@ -22,16 +22,30 @@ public class AdminPasswordFilter extends OncePerRequestFilter {
     @Value("${app.admin-password:}")
     private String adminPassword;
 
+    private void addCorsHeaders(HttpServletRequest request, HttpServletResponse response) {
+        String origin = request.getHeader("Origin");
+        response.setHeader("Access-Control-Allow-Origin", origin != null && !origin.isEmpty() ? origin : "*");
+        response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Admin-Password");
+        response.setHeader("Access-Control-Max-Age", "86400");
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        if (adminPassword == null || adminPassword.isBlank()) {
-            chain.doFilter(request, response);
-            return;
-        }
         String method = request.getMethod();
         String path = request.getRequestURI();
         if (!path.startsWith("/api")) {
+            chain.doFilter(request, response);
+            return;
+        }
+        // 预检请求直接放行并返回 CORS 头，确保带 X-Admin-Password 的请求能通过
+        if ("OPTIONS".equalsIgnoreCase(method)) {
+            addCorsHeaders(request, response);
+            response.setStatus(HttpServletResponse.SC_OK);
+            return;
+        }
+        if (adminPassword == null || adminPassword.isBlank()) {
             chain.doFilter(request, response);
             return;
         }
@@ -41,14 +55,15 @@ public class AdminPasswordFilter extends OncePerRequestFilter {
             return;
         }
         String header = request.getHeader("X-Admin-Password");
-        if (adminPassword.equals(header)) {
+        String expected = adminPassword != null ? adminPassword.trim() : "";
+        String actual = header != null ? header.trim() : "";
+        if (!expected.isEmpty() && expected.equals(actual)) {
             chain.doFilter(request, response);
             return;
         }
+        addCorsHeaders(request, response);
         response.setStatus(403);
         response.setContentType("application/json;charset=UTF-8");
-        response.setHeader("Access-Control-Allow-Origin", request.getHeader("Origin") != null ? request.getHeader("Origin") : "*");
-        response.setHeader("Access-Control-Allow-Credentials", "true");
         response.getWriter().write("{\"error\":\"需要管理员密码\"}");
     }
 }

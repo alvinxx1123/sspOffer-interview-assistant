@@ -70,6 +70,23 @@
   position: relative;
 }
 
+.question-list li .q-edit {
+  position: absolute;
+  right: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: auto;
+  padding: 0 4px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.question-list li .q-edit:hover {
+  color: var(--primary);
+}
+
 .question-list li .q-delete {
   position: absolute;
   right: 8px;
@@ -105,7 +122,8 @@
   padding: 2px 6px;
 }
 
-.question-list .leetcode-link {
+.question-list .leetcode-link,
+.question-list .source-link {
   font-size: 11px;
   margin-left: 4px;
 }
@@ -233,6 +251,12 @@
 
 .add-modal-content h3 {
   margin: 0 0 20px;
+}
+
+.add-modal-error {
+  color: #e74c3c;
+  margin: 0 0 12px;
+  font-size: 14px;
 }
 
 .add-modal-content .form-group {
