@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Editor from '@monaco-editor/react'
 import { api } from '../api/client'
 import './OnlineIDE.css'
@@ -9,26 +10,24 @@ function normalizeDifficulty(d) {
   return (d && DIFFICULTY_MAP[d]) || d || 'medium'
 }
 
+// 仅保留在 Piston 中已安装的语言（若你自建 Piston 只装了 Java/Python/Go，这里只列三项；装其它语言后可在此添加）
 const LANGUAGES = [
   { id: 'python', name: 'Python' },
   { id: 'java', name: 'Java' },
   { id: 'go', name: 'Go' },
-  { id: 'javascript', name: 'JavaScript' },
-  { id: 'cpp', name: 'C++' },
 ]
 
 const LANGUAGE_IDS = {
   python: 'python',
   java: 'java',
   go: 'go',
-  javascript: 'javascript',
-  cpp: 'cpp',
 }
 
 // ACM 白板模式：各语言均为空白，用户自行编写代码和测试用例
 const BLANK_TEMPLATE = ''
 
 export default function OnlineIDE() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [questions, setQuestions] = useState([])
   const [selectedQuestion, setSelectedQuestion] = useState(null)
   const [language, setLanguage] = useState('python')
@@ -55,6 +54,21 @@ export default function OnlineIDE() {
   useEffect(() => {
     loadQuestions()
   }, [])
+
+  // 支持从智能助手跳转：/ide?questionId=3 打开并选中对应题目；选题时同步更新地址栏
+  const questionIdFromUrl = searchParams.get('questionId')
+  useEffect(() => {
+    if (!questionIdFromUrl || questions.length === 0) return
+    const id = parseInt(questionIdFromUrl, 10)
+    if (isNaN(id)) return
+    const q = questions.find((x) => x.id === id)
+    if (q) setSelectedQuestion(q)
+  }, [questionIdFromUrl, questions])
+
+  const selectQuestion = (q) => {
+    setSelectedQuestion(q)
+    setSearchParams(q ? { questionId: String(q.id) } : {})
+  }
 
   useEffect(() => {
     if (selectedQuestion) {
@@ -159,7 +173,7 @@ export default function OnlineIDE() {
     if (!confirm(`确定删除「${q.title}」？`)) return
     try {
       await api.deleteAlgorithm(q.id)
-      if (selectedQuestion?.id === q.id) setSelectedQuestion(null)
+      if (selectedQuestion?.id === q.id) selectQuestion(null)
       loadQuestions()
     } catch (err) {
       console.error(err)
@@ -185,7 +199,7 @@ export default function OnlineIDE() {
                 <button
                   type="button"
                   className={selectedQuestion?.id === q.id ? 'active' : ''}
-                  onClick={() => setSelectedQuestion(q)}
+                  onClick={() => selectQuestion(q)}
                 >
                   <span className="title">{q.title}</span>
                   <span className="badge diff">{normalizeDifficulty(q.difficulty) || q.difficulty}</span>

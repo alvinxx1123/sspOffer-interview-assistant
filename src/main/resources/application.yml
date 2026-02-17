@@ -25,9 +25,9 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
         format_sql: true
 
-# 智谱 GLM 配置：设置环境变量 ZHIPU_API_KEY 或在本机 application-local.yml 填写（勿提交密钥）
+# 智谱 GLM 配置：正式环境请通过环境变量 ZHIPU_API_KEY 或 application-local.yml 覆盖（本文件不要写死真实密钥）
 zhipu:
-  apiKey: ""
+  apiKey: "${ZHIPU_API_KEY:}"
   # 主模型（对话、复盘等）: glm-4-flash, glm-4, glm-4.6v, glm-4.6v-flash 等
   model: glm-4.6v
   # 深挖问题生成专用：更快模型提速
@@ -44,8 +44,18 @@ piston:
   api-url: https://emkc.org/api/v2/piston
 
 # 管理员密码：设置环境变量 APP_ADMIN_PASSWORD 或在本机 application-local.yml 填写；未配置则不校验
+# 网站根地址（用于智能助手生成「本站在线 IDE」链接，如 http://8.138.47.162:8080）
+# 可选：算法题未在题库且无本地映射时，联网搜索力扣/牛客原题链接。
+# 推荐 SearchCans（provider: searchcans）：注册即送 100 次额度，支持 Bing，国内可用。密钥在 searchcans.com → API Keys 创建。
+# 也可选 bing（Azure 订阅密钥）或 serper（Google，需 serper.dev API Key）
 app:
-  admin-password: ""
+  admin-password: "${APP_ADMIN_PASSWORD:}"
+  base-url: ""
+  algorithm-search:
+    enabled: false            # 默认关闭；需要联网搜索时，在本地 application-local.yml 打开并配置 api-key
+    provider: "searchcans"    # searchcans / bing / serper，可在本地覆盖
+    api-key: "${ALGO_SEARCH_API_KEY:}"   # 勿在本文件写死真实 key，改用环境变量或 application-local.yml
+    serper-api-url: "https://google.serper.dev/search"
 
 server:
   port: 8080

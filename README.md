@@ -1,7 +1,7 @@
 <img src="logo.png" alt="sspOffer Logo" width="50%">
                      sspOffer面经助手 - 互联网面试准备平台<br>
                      Live Demo: http://8.138.47.162:8080<br>               
-基于 LangChain4j 的面经整合与 AI 面试准备应用。支持面经搜索、AI 面试模拟、面试复盘、在线算法 IDE。
+基于 LangChain4j 的面经整合与 AI 面试准备应用。支持面经搜索、AI 面试模拟、面试复盘、在线算法 IDE，并通过 Function Calling 让大模型自动调用「查面经、查算法题、运行代码」等后端能力。
 
 
 ## 功能特性
@@ -9,13 +9,14 @@
 - **面经搜索**：按公司、部门检索个人面经，支持手动录入或图片解析
 - **AI 面试模拟**：根据目标公司/部门面经(RAG) + 你的简历生成深挖问题
 - **面试复盘**：上传真实面经，AI 深度复盘分析，给出改进建议
-- **在线 IDE**：支持 Java、Python、Go 等 ACM 模式运行,题库支持手动添加题目
+- **在线 IDE**：支持 Java、Python、Go 等 ACM 模式运行，题库支持手动添加题目
+- **智能助手（Function Calling）**：在「AI 面试模拟」页新增智能助手区域，模型可自动调用后端 Tool 完成「查面经」「查算法题（本地题库优先，未命中再联网搜力扣原题）」「运行代码」，并统一返回一条可点击的纯净链接，避免 HTML 乱码和空白页
 - **简历+投递**：简历管理、投递进度追踪
 - **简单密码保护**：部署时可配置管理员密码，防止他人修改数据
 
 ## 技术栈
 
-- **后端**：Spring Boot 3.2 + LangChain4j + H2
+- **后端**：Spring Boot 3.2 + LangChain4j（RAG + Function Calling）+ H2
 - **前端**：React 18 + Vite + Monaco Editor
 - **AI**：智谱 GLM（glm-4-flash、glm-4v-plus 等）
 - **代码执行**：Piston API（免费）
@@ -46,7 +47,20 @@
    ```
    或设置环境变量：`export ZHIPU_API_KEY=xxx`、`export APP_ADMIN_PASSWORD=xxx`
 
-4. **启动**
+4. **可选：联网搜索算法题原题链接**  
+   当询问的算法题既不在本站题库、也不在本地映射中时，可启用联网搜索，自动返回力扣/牛客等原题链接。
+   - **推荐 SearchCans**（注册即送 100 次额度，国内可用、走 Bing）：在 [SearchCans](https://www.searchcans.com) 注册，进入 **API Keys** 创建密钥，在 `application-local.yml` 添加：
+   ```yaml
+   app:
+     algorithm-search:
+       enabled: true
+       provider: "searchcans"
+       api-key: "你的 SearchCans API Key"
+   ```
+   - 也可选 **Bing**（Azure 订阅密钥，`provider: "bing"`）或 **Serper**（Google，[serper.dev](https://serper.dev)，`provider: "serper"`）。  
+   不配置或 `enabled: false` 时，未命中映射的题目仍会返回力扣搜索页链接。
+
+5. **启动**
    ```bash
    # 后端
    ./mvn spring-boot:run

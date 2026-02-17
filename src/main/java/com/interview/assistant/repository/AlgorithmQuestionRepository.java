@@ -12,4 +12,7 @@ public interface AlgorithmQuestionRepository extends JpaRepository<AlgorithmQues
     List<AlgorithmQuestion> findByDifficulty(String difficulty);
 
     List<AlgorithmQuestion> findByLeetcodeProblemId(Integer leetcodeProblemId);
+
+    /** 按标题模糊查询（忽略大小写），用于智能助手按题名找题 */
+    List<AlgorithmQuestion> findByTitleContainingIgnoreCase(String title);
 }

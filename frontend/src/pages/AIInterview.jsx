@@ -7,6 +7,59 @@ function generateSessionId() {
   return 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11)
 }
 
+/** 助手回复 → 简化为「Markdown + 纯 URL」渲染，前端不再尝试修 HTML，只负责把 [标题](URL) / 裸 URL 变成 <a>。 */
+function formatAssistantContent(content) {
+  if (!content) return ''
+  let s = String(content)
+  // 统一引号（含全角/Unicode）
+  s = s.replace(/\u201C|\u201D|\u201E|\u201F|\u2033|\u2036|\uFF02/g, '"')
+       .replace(/&quot;|&#34;|&amp;quot;/g, '"')
+
+  // 若原始内容本身已经包含 <a 或 href=，视为“旧 HTML”，仅做转义+加粗+换行，避免再次包裹导致 href 里出现 <a%20href=
+  if (s.includes('<a ') || s.includes('href=')) {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n/g, '<br/>')
+  }
+
+  // 从这里开始，是“干净文本 + Markdown 链接”的普通路径
+  // 先对 <、> 做转义，避免模型输出的 HTML 被直接执行
+  s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  // 生成 <a> 时 href 必须为纯净 URL，防止 `<a href=` 等被当成地址栏的一部分
+  const cleanHref = (u) =>
+    (u || '')
+      .split('"')[0]
+      .split(' ')[0]
+      .split('<')[0]
+      .trim()
+
+  // 1) 先把 Markdown 链接 [标题](URL) 变成 <a>
+  s = s.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    (_, text, url) =>
+      `<a href="${cleanHref(url)}" target="_blank" rel="noopener noreferrer">${(text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</a>`
+  )
+
+  // 2) 再把「未在 href 中的」裸 URL 变成 <a>，避免对 <a href="url"> 里的 url 再包一层
+  s = s.replace(
+    /(?<!href=")(https?:\/\/[^\s<>"')\]\u4e00-\u9fa5,，。、]+)/g,
+    (_, url) =>
+      `<a href="${cleanHref(url)}" target="_blank" rel="noopener noreferrer">${cleanHref(url)}</a>`
+  )
+
+  // 3) 加粗 **文本**
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+
+  // 4) 换行变 <br/>
+  s = s.replace(/\n/g, '<br/>')
+
+  return s
+}
+
 export default function AIInterview() {
   const [companies, setCompanies] = useState([])
   const [departments, setDepartments] = useState([])
@@ -26,6 +79,10 @@ export default function AIInterview() {
   const [parsingResume, setParsingResume] = useState(false)
   const [resumeMsg, setResumeMsg] = useState('')
   const chatEndRef = useRef(null)
+  // 智能助手（Function Calling）：可查面经、题库、运行代码
+  const [toolsInput, setToolsInput] = useState('')
+  const [toolsMessages, setToolsMessages] = useState([])
+  const [toolsLoading, setToolsLoading] = useState(false)
 
   useEffect(() => {
     api.getCompanies().then(setCompanies).catch(console.error)
@@ -95,6 +152,24 @@ export default function AIInterview() {
     setSessionEnded(true)
     const sid = sessionId
     api.endChatSession(sid, questions, resumeContent, company, department).then(loadHistory).catch(console.error)
+  }
+
+  const sendToolsChat = async () => {
+    const msg = toolsInput.trim()
+    if (!msg || toolsLoading) return
+    setToolsInput('')
+    setToolsMessages((prev) => [...prev, { role: 'user', content: msg }])
+    setToolsLoading(true)
+    try {
+      const res = await api.chatWithTools(msg)
+      const reply = res?.reply ?? (typeof res === 'string' ? res : '')
+      setToolsMessages((prev) => [...prev, { role: 'assistant', content: reply }])
+    } catch (e) {
+      console.error(e)
+      setToolsMessages((prev) => [...prev, { role: 'assistant', content: '回复失败: ' + (e.message || '') }])
+    } finally {
+      setToolsLoading(false)
+    }
   }
 
   const viewSession = async (sess) => {
@@ -289,6 +364,39 @@ export default function AIInterview() {
           )}
         </>
       )}
+
+      <div className="tools-section">
+        <h2>智能助手（Function Calling v2）</h2>
+        <p className="tools-hint">直接提问，助手可自动查面经、查题库、运行代码。例如：「查一下字节后端的面经」「给我一道中等难度的算法题」「运行这段 Java 代码：...」</p>
+        <div className="tools-messages">
+          {toolsMessages.map((m, i) => (
+            <div key={i} className={`chat-msg ${m.role}`}>
+              <span className="chat-role">{m.role === 'user' ? '你' : '助手'}</span>
+              <div className="chat-content markdown-like" style={{ whiteSpace: 'pre-wrap' }} dangerouslySetInnerHTML={{ __html: formatAssistantContent(m.content) }} />
+            </div>
+          ))}
+          {toolsLoading && (
+            <div className="chat-msg assistant">
+              <span className="chat-role">助手</span>
+              <span className="chat-loading">思考中（可能正在调用工具）...</span>
+            </div>
+          )}
+        </div>
+        <div className="chat-input-row">
+          <input
+            type="text"
+            className="tools-input"
+            value={toolsInput}
+            onChange={(e) => setToolsInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && sendToolsChat()}
+            placeholder="输入问题，如：查一下腾讯面经、给我一道算法题"
+            disabled={toolsLoading}
+          />
+          <button className="btn-primary chat-send" onClick={sendToolsChat} disabled={toolsLoading || !toolsInput.trim()}>
+            发送
+          </button>
+        </div>
+      </div>
 
       <div className="history-section">
         <h2>历史会话</h2>

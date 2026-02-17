@@ -4,6 +4,7 @@ import com.interview.assistant.entity.InterviewChatSession;
 import com.interview.assistant.entity.InterviewExperience;
 import com.interview.assistant.service.InterviewDataService;
 import com.interview.assistant.service.InterviewAgentService;
+import com.interview.assistant.service.InterviewAgentWithToolsService;
 import com.interview.assistant.service.InterviewChatService;
 import com.interview.assistant.service.ImageParseService;
 import org.slf4j.Logger;
@@ -27,13 +28,16 @@ public class InterviewController {
     private static final Logger log = LoggerFactory.getLogger(InterviewController.class);
     private final InterviewDataService interviewDataService;
     private final InterviewAgentService agentService;
+    private final InterviewAgentWithToolsService agentWithToolsService;
     private final InterviewChatService interviewChatService;
     private final ImageParseService imageParseService;
 
     public InterviewController(InterviewDataService interviewDataService, InterviewAgentService agentService,
+                              InterviewAgentWithToolsService agentWithToolsService,
                               InterviewChatService interviewChatService, ImageParseService imageParseService) {
         this.interviewDataService = interviewDataService;
         this.agentService = agentService;
+        this.agentWithToolsService = agentWithToolsService;
         this.interviewChatService = interviewChatService;
         this.imageParseService = imageParseService;
     }
@@ -134,6 +138,22 @@ public class InterviewController {
         return ResponseEntity.ok(result);
     }
 
+    /** 带 Function Calling 的对话：模型可调用面经检索、题库查询、代码执行等工具后回复 */
+    @PostMapping("/chat-with-tools")
+    public ResponseEntity<?> chatWithTools(@RequestBody Map<String, String> request) {
+        String message = request != null ? request.get("message") : null;
+        if (message == null || message.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "message 不能为空"));
+        }
+        try {
+            String reply = agentWithToolsService.chat(message);
+            return ResponseEntity.ok(Map.of("reply", reply));
+        } catch (Exception e) {
+            log.error("chatWithTools failed", e);
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage() != null ? e.getMessage() : "对话失败"));
+        }
+    }
+
     /** 面试深挖问题后的上下文探讨，支持记忆 */
     @PostMapping("/chat-session")
     public ResponseEntity<?> chatSession(@RequestBody Map<String, String> request) {
@@ -148,7 +168,7 @@ public class InterviewController {
         }
         try {
             String result = interviewChatService.chat(sessionId, userMessage, questions, resume, company, department);
-            return ResponseEntity.ok(Map.of("reply", result));
+            return ResponseEntity.ok(Map.of("reply", InterviewAgentWithToolsService.finalFormatting(result)));
         } catch (Exception e) {
             log.error("chatSession failed", e);
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage() != null ? e.getMessage() : "对话失败"));

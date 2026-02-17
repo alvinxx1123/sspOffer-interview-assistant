@@ -220,6 +220,52 @@
 }
 
 /* 历史会话 */
+.tools-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.tools-section h2 {
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+}
+
+.tools-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.tools-messages {
+  min-height: 60px;
+  max-height: 280px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  padding: 12px;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.tools-section .chat-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.tools-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
 .history-section {
   margin-top: 32px;
   padding: 24px;
@@ -426,6 +472,16 @@
 
 .chat-content.markdown-like {
   white-space: pre-wrap;
+}
+
+.chat-content a {
+  color: var(--accent);
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.chat-content a:hover {
+  opacity: 0.9;
 }
 
 .session-empty-hint {

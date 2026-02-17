@@ -176,6 +176,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ query, company, department }),
     }),
+  /** 带 Function Calling 的对话：可查面经、题库、运行代码等 */
+  chatWithTools: (message) =>
+    request('/interviews/chat-with-tools', {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    }),
 
   // 复盘（超时 3 分钟；先试代理，失败再直连后端，减少 Failed to fetch）
   analyzeReplay: async (company, department, content) => {

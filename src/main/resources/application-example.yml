@@ -7,3 +7,9 @@ zhipu:
 
 app:
   admin-password: "你的管理员密码"
+  # 可选：联网搜索算法题原题（力扣/牛客）。推荐 SearchCans：注册送 100 次，国内可用（走 Bing）
+  # algorithm-search:
+  #   enabled: true
+  #   provider: "searchcans"   # searchcans（推荐）| bing | serper
+  #   api-key: "你的 SearchCans API Key（官网 API Keys 创建）"
+  #   # serper-api-url 仅 provider=serper 时生效
