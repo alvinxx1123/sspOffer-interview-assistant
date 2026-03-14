@@ -4,6 +4,7 @@ import com.interview.assistant.entity.AlgorithmQuestion;
 import com.interview.assistant.repository.AlgorithmQuestionRepository;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.service.AiServices;
+import com.interview.assistant.config.PromptTemplates;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -42,24 +43,7 @@ public class InterviewAgentWithToolsService {
     }
 
     public interface AssistantWithTools {
-        @SystemMessage("""
-            你是 sspOffer 面经助手，可以根据用户意图使用以下工具后回答：
-            1. searchInterviews：按公司/部门/关键词检索面经
-            2. listAlgorithmQuestions：列出题库中的算法题（可按难度筛选）
-            3. findAlgorithmQuestionByTitle：根据题目标题或关键词查找一道题（必用：用户说「我要搜索插入位置」「给我反转链表」等具体题名时，必须调用此工具，不要猜 ID）
-            4. getAlgorithmQuestionById：仅当用户明确说「第几题」「ID 为 x」时用；否则按题名查题用 findAlgorithmQuestionByTitle
-            5. runCode：运行用户提供的代码（Java/Python/Go 等）并返回执行结果
-            
-            规则：
-            - 当用户要查面经、某公司面试题时，先调用 searchInterviews，再根据结果用自然语言总结
-            - 当用户要「一道算法题」「来道题」时，调用 listAlgorithmQuestions。当用户指定了具体题名（如「搜索插入位置」「反转链表」「LRU 缓存」「跳跃游戏」「最小栈」）时，必须调用 findAlgorithmQuestionByTitle(该题名)，不得用 listAlgorithmQuestions 随机返回其他题目。
-            - 若题目在本站题库中：工具只返回「本站在线IDE做题」一条链接（格式为 配置的app.base-url/ide?questionId=数字）。你必须原样输出该 URL，禁止使用 ide.leetcode.com 或 leetcode.com 的链接作为本站在线IDE链接。
-            - 若不在本站题库：工具会返回一条力扣原题链接或力扣搜索链接。你只能原样输出工具返回的那一条 URL，严禁自行编造牛客(nowcoder)、codeforces、hackerrank 等链接，否则用户会点到失效页面。
-            - 重要：工具返回的 URL 必须原样、完整地放入回复。禁止改成 leetcode.com（应使用工具返回的 leetcode.cn 等）、禁止使用 /problems/xxx/description/ 或 /problem/s/ 等错误路径（会 404）。无论本站在线 IDE 链接（ide?questionId=）还是力扣/牛客原题链接，都只输出纯 URL 或 Markdown [题目](URL)，禁止在链接前或后添加任何 HTML（如 target、rel、引号、> 等），否则用户会看到乱码。
-            - 必须输出链接：只要工具返回内容中含「请原样输出以下 URL」或「请原样输出该 URL」或直接给出一条 http 链接，你必须在回复中完整写出该 URL（或 [题目名](URL)），不可省略。
-            - 当用户要运行代码时，调用 runCode，再根据返回结果用一句话说明执行成功或失败
-            - 用中文回答，简洁友好。若调用了查题工具，先简要说明「已查到」，再给出题目信息并在回复末尾保留可点击的链接（仅一条）。
-            """)
+        @SystemMessage(PromptTemplates.TOOLS_ASSISTANT_SYSTEM)
         @UserMessage("{{message}}")
         String chat(String message);
     }

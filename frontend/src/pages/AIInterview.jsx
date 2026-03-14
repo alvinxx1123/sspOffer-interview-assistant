@@ -76,6 +76,7 @@ export default function AIInterview() {
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [thinkingSteps, setThinkingSteps] = useState([])
   const [parsingResume, setParsingResume] = useState(false)
   const [resumeMsg, setResumeMsg] = useState('')
   const chatEndRef = useRef(null)
@@ -100,18 +101,30 @@ export default function AIInterview() {
   const generate = async () => {
     setLoading(true)
     setQuestions('')
+    setThinkingSteps([])
     setSessionId('')
     setSessionEnded(false)
     setChatMessages([])
     try {
-      const text = await api.generateQuestions(company || '', department || '', resumeContent || '')
-      setQuestions(text || '')
-      setSessionId(generateSessionId())
+      await api.generateQuestionsStream(
+        company || '',
+        department || '',
+        resumeContent || '',
+        {
+          onStep: (step) => setThinkingSteps((prev) => [...prev, step]),
+          onResult: (text) => {
+            setQuestions(text || '')
+            setSessionId(generateSessionId())
+          },
+          onError: (msg) => setQuestions('生成失败: ' + (msg || '请检查网络或后端配置')),
+        }
+      )
     } catch (e) {
       console.error(e)
-      setQuestions('生成失败: ' + (e.message || '请检查网络或后端配置'))
+      if (!questions) setQuestions('生成失败: ' + (e.message || '请检查网络或后端配置'))
     } finally {
       setLoading(false)
+      setThinkingSteps([])
     }
   }
 
@@ -300,6 +313,26 @@ export default function AIInterview() {
           {loading ? '生成中...' : '生成深挖问题'}
         </button>
       </div>
+
+      {(loading || thinkingSteps.length > 0) && (
+        <div className="thinking-steps">
+          <h3 className="thinking-title">思考过程</h3>
+          <ul className="thinking-list">
+            {thinkingSteps.map((step, i) => (
+              <li key={i} className="thinking-step">
+                <span className="thinking-dot" />
+                {step}
+              </li>
+            ))}
+            {loading && thinkingSteps.length === 0 && (
+              <li className="thinking-step">
+                <span className="thinking-dot thinking-dot-pulse" />
+                准备中…
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
 
       {questions && (
         <>

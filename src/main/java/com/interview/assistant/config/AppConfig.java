@@ -4,7 +4,7 @@ import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
-import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
@@ -45,14 +45,20 @@ public class AppConfig implements WebMvcConfigurer {
                 .allowedHeaders("*");
     }
 
+    /** 智谱 API Key 已配置时使用智谱 Embedding，否则使用本地 AllMiniLM */
     @Bean
-    public EmbeddingModel embeddingModel() {
+    public EmbeddingModel embeddingModel(@Value("${zhipu.apiKey:}") String zhipuApiKey,
+                                        WebClient.Builder webClientBuilder) {
+        String key = (zhipuApiKey != null && !zhipuApiKey.isBlank()) ? zhipuApiKey : System.getenv("ZHIPU_API_KEY");
+        if (key != null && !key.isBlank()) {
+            return new ZhipuEmbeddingModel(key, "", "embedding-2", webClientBuilder);
+        }
         return new AllMiniLmL6V2EmbeddingModel();
     }
 
     @Bean
     public EmbeddingStore<TextSegment> embeddingStore() {
-        return new InMemoryEmbeddingStore<>();
+        return new InterviewEmbeddingStore();
     }
 
     @Bean

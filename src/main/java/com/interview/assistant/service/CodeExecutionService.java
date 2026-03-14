@@ -45,6 +45,7 @@ public class CodeExecutionService {
         if (pistonApiUrl == null || pistonApiUrl.isBlank()) {
             log.warn("piston.api-url 未配置，使用默认公网地址。自建 Piston 请在 application.yml 或环境变量 PISTON_API_URL 中配置");
         }
+        log.info("代码执行使用 Piston 地址: {}", baseUrl);
         String pistonLang = LANGUAGE_MAP.getOrDefault(language.toLowerCase(), language.toLowerCase());
         String version = getDefaultVersion(pistonLang);
 
@@ -61,10 +62,10 @@ public class CodeExecutionService {
                 Matcher mainClassMatcher = Pattern.compile("public\\s+class\\s+(\\w+)").matcher(code);
                 if (!mainPat.matcher(code).find()) {
                     javaCode = wrapJavaWithoutMain(code);
-                    mainFileName = "Main";
+                    mainFileName = "Main.java";
                 } else {
                     javaCode = normalizeJavaMainToMain(code);
-                    mainFileName = mainClassMatcher.find() ? mainClassMatcher.group(1) : "Main";
+                    mainFileName = mainClassMatcher.find() ? mainClassMatcher.group(1) + ".java" : "Main.java";
                 }
             }
             Map<String, Object> fileEntry = new HashMap<>();
@@ -92,6 +93,12 @@ public class CodeExecutionService {
                     ? node.get("run").get("stderr").asText() : "";
             int code_ = node.has("run") && node.get("run").has("code")
                     ? node.get("run").get("code").asInt() : -1;
+            if (stdout.isEmpty() && node.has("run") && node.get("run").has("output")) {
+                stdout = node.get("run").get("output").asText();
+            }
+            if (stdout.isEmpty() && stderr.isEmpty()) {
+                log.warn("Piston 返回无 stdout/stderr，原始响应(前500字符): {}", response != null && response.length() > 500 ? response.substring(0, 500) + "..." : response);
+            }
 
             if (node.has("compile") && node.get("compile").has("stderr")) {
                 String compileErr = node.get("compile").get("stderr").asText();

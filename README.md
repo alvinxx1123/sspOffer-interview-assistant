@@ -1,160 +1,103 @@
 <img src="logo.png" alt="sspOffer Logo" width="50%">
-                     sspOffer面经助手 - 互联网面试准备平台<br>
-                     Live Demo: http://8.138.47.162:8080<br>               
-基于 LangChain4j 的面经整合与 AI 面试准备应用。支持面经搜索、AI 面试模拟、面试复盘、在线算法 IDE，并通过 Function Calling 让大模型自动调用「查面经、查算法题、运行代码」等后端能力。
 
+**sspOffer面经助手** - 互联网面试准备平台  
+Live Demo: http://8.138.47.162:8080
+
+基于 LangChain4j 的面经整合与 AI 面试准备应用。支持面经搜索、AI 面试模拟（RAG + 深挖题）、面试复盘、在线算法 IDE，并通过 Function Calling 让大模型自动调用「查面经、查算法题、运行代码」等后端能力。
+
+---
 
 ## 功能特性
 
-- **面经搜索**：按公司、部门检索个人面经，支持手动录入或图片解析
-- **AI 面试模拟**：根据目标公司/部门面经(RAG) + 你的简历生成深挖问题
+- **面经搜索**：按公司、部门检索个人面经，支持手动录入或**图片解析**（八股/算法题自动换行、常见 OCR 纠错）
+- **AI 面试模拟**：根据目标公司/部门**面经库 RAG** + 简历生成 **9–12 道深挖题**（实习、项目、八股、大模型/算法），**SSE 流式**输出并展示「思考过程」（检索结果、生成进度）
+- **面试对话**：生成深挖题后可「与面试官探讨」，结合 RAG 追问/答疑
 - **面试复盘**：上传真实面经，AI 深度复盘分析，给出改进建议
 - **在线 IDE**：支持 Java、Python、Go 等 ACM 模式运行，题库支持手动添加题目
-- **智能助手（Function Calling）**：在「AI 面试模拟」页新增智能助手区域，模型可自动调用后端 Tool 完成「查面经」「查算法题（本地题库优先，未命中再联网搜力扣原题）」「运行代码」，并统一返回一条可点击的纯净链接，避免 HTML 乱码和空白页
-- **简历+投递**：简历管理、投递进度追踪
+- **智能助手（Function Calling）**：模型可自动调用「查面经」「查算法题」「运行代码」，返回可点击的纯净链接
+- **简历 + 投递**：简历管理、投递进度追踪（编辑时自动滚动到表单并提示「正在编辑」）
 - **简单密码保护**：部署时可配置管理员密码，防止他人修改数据
+
+---
 
 ## 技术栈
 
-- **后端**：Spring Boot 3.2 + LangChain4j（RAG + Function Calling）+ H2
-- **前端**：React 18 + Vite + Monaco Editor
-- **AI**：智谱 GLM（glm-4-flash、glm-4v-plus 等）
-- **代码执行**：Piston API（免费）
+| 类别     | 技术 |
+|----------|------|
+| 后端     | Spring Boot 3.2 + LangChain4j（RAG + Function Calling）+ H2 |
+| 前端     | React 18 + Vite + Monaco Editor |
+| AI       | 智谱 GLM（glm-4-flash、glm-4v-plus 等） |
+| RAG      | 面经按字段分块（实习/项目/八股/大模型/算法），可选智谱 Embedding 或本地 AllMiniLM |
+| 代码执行 | Piston API（可自建） |
 
 ---
 
-## 一、克隆后配置准备
+## 本地快速开始
 
-1. **克隆项目**
-   ```bash
-   git clone https://github.com/alvinxx1123/sspOffer-interview-assistant.git
-   cd sspOffer-interview-assistant
-   ```
+### 1. 克隆与配置
 
-2. **配置智谱 API Key（AI 功能必需）**（可替换）  
-   在 `src/main/resources/` 下创建 `application-local.yml`：
-   
-   ```yaml
-   zhipu:
-     apiKey: "你的智谱API_Key"
-   ```
-   
-3. **配置管理员密码（可选）**  
-   若需密码保护修改操作，在 `application-local.yml` 添加：
-   ```yaml
-   app:
-     admin-password: "你的密码"
-   ```
-   或设置环境变量：`export ZHIPU_API_KEY=xxx`、`export APP_ADMIN_PASSWORD=xxx`
+```bash
+git clone https://github.com/alvinxx1123/sspOffer-interview-assistant.git
+cd sspOffer-interview-assistant
+```
 
-4. **可选：联网搜索算法题原题链接**  
-   当询问的算法题既不在本站题库、也不在本地映射中时，可启用联网搜索，自动返回力扣/牛客等原题链接。
-   - **推荐 SearchCans**（注册即送 100 次额度，国内可用、走 Bing）：在 [SearchCans](https://www.searchcans.com) 注册，进入 **API Keys** 创建密钥，在 `application-local.yml` 添加：
-   ```yaml
-   app:
-     algorithm-search:
-       enabled: true
-       provider: "searchcans"
-       api-key: "你的 SearchCans API Key"
-   ```
-   - 也可选 **Bing**（Azure 订阅密钥，`provider: "bing"`）或 **Serper**（Google，[serper.dev](https://serper.dev)，`provider: "serper"`）。  
-   不配置或 `enabled: false` 时，未命中映射的题目仍会返回力扣搜索页链接。
+在 `src/main/resources/` 下创建 `application-local.yml`（不提交到 Git）：
 
-5. **启动**
-   ```bash
-   # 后端
-   ./mvn spring-boot:run
-   
-   # 前端（另一终端）
-   cd frontend
-   npm install
-   npm run dev
-   ```
-   访问 http://localhost:5173
-
----
-
-## 二、阿里云部署教程（单机访问网站）
-
-### 方式一：ECS + 单 jar 运行
-
-1. **购买阿里云 ECS**（如 2 核 4G，CentOS 7/8 或 Ubuntu）
-
-2. **在本地打包**
-   ```bash
-   cd frontend && npm install && npm run build && cd ..
-   ./mvn package
-   ```
-   生成 `target/interview-assistant-1.0.0.jar`
-
-3. **上传到 ECS**
-   ```bash
-   scp target/interview-assistant-1.0.0.jar root@你的公网IP:/opt/
-   ```
-
-4. **在 ECS 上运行**
-   ```bash
-   ssh root@你的公网IP
-   cd /opt
-   export ZHIPU_API_KEY=你的API_Key
-   export APP_ADMIN_PASSWORD=你的密码
-   nohup java -jar interview-assistant-1.0.0.jar --server.port=8080 > app.log 2>&1 &
-   ```
-
-5. **开放 8080 端口**  
-   阿里云控制台 → 安全组 → 添加入方向规则：TCP 8080
-
-6. **访问**  
-   http://你的公网IP:8080
-
-7. **开机自启**（可选）  
-   使用 systemd 创建服务：
-   ```ini
-   # /etc/systemd/system/interview-assistant.service
-   [Unit]
-   Description=sspOffer Interview Assistant
-   After=network.target
-   
-   [Service]
-   User=root
-   WorkingDirectory=/opt
-   ExecStart=/usr/bin/java -jar /opt/interview-assistant-1.0.0.jar --server.port=8080
-   Environment="ZHIPU_API_KEY=你的API_Key"
-   Environment="APP_ADMIN_PASSWORD=你的密码"
-   Restart=on-failure
-   
-   [Install]
-   WantedBy=multi-user.target
-   ```
-   ```bash
-   systemctl daemon-reload
-   systemctl enable interview-assistant
-   systemctl start interview-assistant
-   ```
-
----
-
-## 快速开始（本地开发）
-
-### 1. 配置智谱 API Key（AI 功能必需）(可替换自定义大模型API Key)
-
-从 [智谱开放平台](https://open.bigmodel.cn/) 获取 API Key，在 `src/main/resources/` 创建 `application-local.yml`：
 ```yaml
 zhipu:
-  apiKey: "你的API_Key"
+  apiKey: "你的智谱API_Key"
+
+# 可选：管理员密码
+app:
+  admin-password: "你的密码"
 ```
+
+也可使用环境变量：`export ZHIPU_API_KEY=xxx`、`export APP_ADMIN_PASSWORD=xxx`。
 
 ### 2. 启动
 
 ```bash
-# 后端
-./mvn spring-boot:run
+# 终端 1：后端
+mvn spring-boot:run
 
-# 前端
+# 终端 2：前端
 cd frontend && npm install && npm run dev
 ```
 
-访问 http://localhost:5173
+浏览器访问 http://localhost:5173。
+
+### 3. 可选配置
+
+- **联网搜索算法题原题**：在 `application-local.yml` 中配置 `app.algorithm-search`（如 SearchCans/Bing/Serper），未命中题库时可返回力扣等链接。
+- **智谱 Embedding**：在 `application.yml` 中配置 `zhipu.apiKey` 后，RAG 默认使用智谱 Embedding-2；未配置则使用本地 AllMiniLM。
+
+---
+
+## 打包与部署（阿里云 ECS）
+
+在项目根目录执行：
+
+```bash
+./scripts/deploy.sh
+scp target/interview-assistant-1.0.0.jar root@你的公网IP:/opt/
+```
+
+服务器上（首次需配置环境变量或 `/opt/interview-assistant.env`，见下方「开机自启」）：
+
+```bash
+sudo pkill -9 java
+sudo systemctl restart interview-assistant
+```
+
+**开机自启（systemd）**：将 `ZHIPU_API_KEY`、`APP_ADMIN_PASSWORD` 写在 `/opt/interview-assistant.env` 或 Service 的 `Environment` 中，然后：
+
+```bash
+systemctl daemon-reload
+systemctl enable interview-assistant
+systemctl start interview-assistant
+```
+
+更详细的部署与「提交到 GitHub 且不提交敏感配置」说明见 [docs/部署与提交说明.md](docs/部署与提交说明.md)。
 
 ---
 
@@ -162,16 +105,37 @@ cd frontend && npm install && npm run dev
 
 ```
 interview-assistant/
-├── src/main/java/          # 后端
+├── src/main/java/              # 后端
 ├── src/main/resources/
-│   ├── application.yml     # 主配置（不含敏感信息）
-│   └── application-local.yml  # 本地配置（gitignore）
-├── frontend/               # 前端
+│   ├── application.yml         # 主配置（不含密钥）
+│   └── application-local.yml   # 本地配置（gitignore）
+├── frontend/                   # 前端
+├── scripts/
+│   ├── deploy.sh               # 本地打包（前端 build + 后端 jar）
+│   └── run_rag_experiment.sh   # 对比实验：深挖题 API 调用并保存结果
+├── docs/                       # 项目文档
+│   ├── 部署与提交说明.md
+│   ├── 对比实验-面经RAG与通用大模型.md
+│   ├── 优化方案-面经RAG与对话升级.md
+│   ├── 自建Piston代码执行.md
+│   └── ...
 └── pom.xml
 ```
 
 ---
 
+## 文档索引
+
+| 文档 | 说明 |
+|------|------|
+| [部署与提交说明](docs/部署与提交说明.md) | 打包部署、推送到 GitHub（不提交 application.yml） |
+| [对比实验-面经RAG与通用大模型](docs/对比实验-面经RAG与通用大模型.md) | RAG+智谱 vs 直接上传 DeepSeek/ChatGPT 的差异与实验步骤 |
+| [优化方案-面经RAG与对话升级](docs/优化方案-面经RAG与对话升级.md) | 面经分块、Embedding、Prompt 等方案说明 |
+| [自建Piston代码执行](docs/自建Piston代码执行.md) | 代码执行超时或不可用时自建 Piston |
+| [后端技术栈与改进建议](docs/后端技术栈与改进建议.md) | 技术栈与后续优化建议 |
+
+---
+
 ## License
 
-本项目采用 [MIT License](./LICENSE) 开源协议。
+[MIT License](./LICENSE)

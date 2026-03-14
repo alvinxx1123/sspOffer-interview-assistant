@@ -37,10 +37,11 @@ public class DataLoader implements CommandLineRunner {
         reindexRagFromDb();
     }
 
-    /** 启动时从数据库重建 RAG 向量索引（向量在内存，重启后需重新索引） */
+    /** 启动时从数据库重建 RAG 向量索引（向量在内存，重启后需重新索引；先清空再全量索引避免重复） */
     private void reindexRagFromDb() {
         List<InterviewExperience> all = experienceRepository.findAll();
         if (all.isEmpty()) return;
+        ragService.clearAll();
         ragService.indexExperiencesAsync(all);
         log.info("RAG 启动索引: {} 条面经（后台执行中）", all.size());
     }

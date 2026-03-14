@@ -16,9 +16,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.json.MappingJacksonValue;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @RestController
 @RequestMapping("/api/interviews")
@@ -86,6 +90,44 @@ public class InterviewController {
             log.error("generateQuestions failed", e);
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage() != null ? e.getMessage() : "生成失败，请检查智谱 API 配置"));
         }
+    }
+
+    /** 深挖问题 SSE 流式：先推送步骤（链式思考），再推送完整结果 */
+    @PostMapping(value = "/questions/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter generateQuestionsStream(@RequestBody Map<String, String> request) {
+        String company = request != null ? request.get("company") : null;
+        String department = request != null ? request.getOrDefault("department", "") : "";
+        String resume = request != null ? request.getOrDefault("resume", "") : "";
+        SseEmitter emitter = new SseEmitter(120_000L);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.execute(() -> {
+            try {
+                String result = agentService.generateInterviewQuestionsWithSteps(company, department, resume, step -> {
+                    try {
+                        emitter.send(SseEmitter.event().name("step").data(step));
+                    } catch (IOException e) {
+                        log.warn("SSE send step failed", e);
+                    }
+                });
+                emitter.send(SseEmitter.event().name("result").data(result != null ? result : ""));
+            } catch (Exception e) {
+                log.error("generateQuestionsStream failed", e);
+                try {
+                    emitter.send(SseEmitter.event().name("error").data(e.getMessage() != null ? e.getMessage() : "生成失败"));
+                } catch (IOException ignored) {}
+            } finally {
+                try {
+                    emitter.complete();
+                } catch (Exception ignored) {}
+                executor.shutdown();
+            }
+        });
+        emitter.onTimeout(() -> {
+            executor.shutdownNow();
+            emitter.complete();
+        });
+        emitter.onError(e -> executor.shutdownNow());
+        return emitter;
     }
 
     @PostMapping("/experiences")

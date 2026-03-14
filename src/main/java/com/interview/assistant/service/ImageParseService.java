@@ -10,10 +10,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 图片面经解析：上传图片，调用智谱 GLM-4V 视觉模型提取 实习经历、项目经历、八股、算法 等
@@ -34,7 +35,7 @@ public class ImageParseService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private static final String PARSE_PROMPT = """
-        这是一张面经图片，请从中提取并返回 JSON 格式，包含以下字段（若无则填空字符串）：
+        这是一张面经图片，请从中完整提取并返回 JSON 格式，包含以下字段（若无则填空字符串）：
         {
           "company": "公司名",
           "department": "部门",
@@ -42,12 +43,16 @@ public class ImageParseService {
           "type": "校招/社招/实习",
           "internshipExperiences": ["实习经历1", "实习经历2"],
           "projectExperiences": ["项目经历1", "项目经历2"],
-          "baguQuestions": "八股题目及内容",
+          "baguQuestions": "八股题目及内容（见下方格式要求）",
           "llmQuestions": "大模型相关八股（若无则空）",
           "algorithmQuestions": "算法题描述",
           "algorithmLink": "力扣或原题链接（若无则空）",
           "content": "面经整体概要"
         }
+        重要：
+        1. baguQuestions、llmQuestions、algorithmQuestions 为字符串：每道题单独占一行，题目与题目之间用换行符\\n分隔。若原文有编号（如 1. 2.）或括号内备注（如“答的不好”“忘了”），请完整保留。
+        2. 文字不要在多字词中间插入空格（如“介绍”不要写成“介 绍”），不要输出无意义的竖线等符号。
+        3. 尽量完整识别每条八股题，避免漏提。
         只返回 JSON，不要其他说明。
         """;
 
@@ -118,10 +123,38 @@ public class ImageParseService {
 
             @SuppressWarnings("unchecked")
             Map<String, Object> parsed = objectMapper.readValue(content, Map.class);
+            normalizeParsedBaguAndAlgo(parsed);
             return parsed;
         } catch (Exception e) {
             log.error("图片解析失败", e);
             throw new RuntimeException("图片解析失败: " + e.getMessage());
         }
+    }
+
+    /** 八股/算法字段后处理：修正常见 OCR 错误，并保证题目之间换行 */
+    private void normalizeParsedBaguAndAlgo(Map<String, Object> parsed) {
+        for (String key : new String[]{"baguQuestions", "llmQuestions", "algorithmQuestions"}) {
+            Object val = parsed.get(key);
+            if (val == null) continue;
+            String s = val instanceof String ? (String) val : String.valueOf(val);
+            if (s.isBlank()) continue;
+            s = normalizeQuestionBlock(s);
+            parsed.put(key, s);
+        }
+    }
+
+    private String normalizeQuestionBlock(String raw) {
+        if (raw == null || raw.isBlank()) return raw;
+        String s = raw;
+        s = s.replace("介 绍", "介绍");
+        s = s.replace("|", " ").replace("  ", " ").trim();
+        boolean hasNewline = s.contains("\n");
+        String[] parts = hasNewline ? s.split("\\r?\\n") : s.split("[,，]");
+        List<String> lines = new ArrayList<>();
+        for (String p : parts) {
+            String line = p.trim();
+            if (!line.isEmpty()) lines.add(line);
+        }
+        return String.join("\n", lines);
     }
 }

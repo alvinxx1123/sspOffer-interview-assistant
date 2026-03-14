@@ -154,6 +154,75 @@ export const api = {
     const text = await res.text()
     return text || null
   },
+  /** 深挖问题 SSE 流式：onStep(步骤文案)、onResult(完整文本)、onError(错误信息) */
+  generateQuestionsStream: async (company, department, resume, { onStep, onResult, onError }) => {
+    const base = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE
+    const directUrl = 'http://127.0.0.1:8080/api/interviews/questions/stream'
+    const proxyUrl = base.startsWith('http') ? `${base}/interviews/questions/stream` : `${base}/interviews/questions/stream`
+    const body = JSON.stringify({ company, department, resume })
+    const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }
+    let res
+    try {
+      res = await doFetch(directUrl, opts, true)
+    } catch (_) {
+      try {
+        res = await doFetch(proxyUrl, opts, true)
+      } catch (e) {
+        onError?.(e?.message || '网络错误')
+        throw e
+      }
+    }
+    if (!res || !res.ok) {
+      const msg = res ? (res.status + ' ' + res.statusText) : '请求失败'
+      let err = msg
+      try {
+        const json = await res?.json?.()
+        if (json?.error) err = json.error
+      } catch (_) {}
+      onError?.(err)
+      throw new Error(err)
+    }
+    const reader = res.body.getReader()
+    const dec = new TextDecoder()
+    let buf = ''
+    let currentEvent = ''
+    let dataLines = []
+    const flushData = () => {
+      if (!currentEvent || dataLines.length === 0) return
+      const data = dataLines.join('\n').trim()
+      if (currentEvent === 'step') onStep?.(data)
+      else if (currentEvent === 'result') onResult?.(data)
+      else if (currentEvent === 'error') onError?.(data)
+      dataLines = []
+      currentEvent = ''
+    }
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        const lines = buf.split(/\n/)
+        buf = lines.pop() || ''
+        for (const line of lines) {
+          if (line.startsWith('event:')) {
+            flushData()
+            currentEvent = line.slice(6).trim()
+          } else if (line.startsWith('data:')) {
+            dataLines.push(line.slice(5).replace(/^\[DONE\]\s*$/, '').trim())
+          } else if (line.trim() === '') {
+            flushData()
+          }
+        }
+      }
+      flushData()
+      if (buf.startsWith('data:')) {
+        dataLines.push(buf.slice(5).trim())
+        if (currentEvent === 'result') flushData()
+      }
+    } finally {
+      reader.releaseLock()
+    }
+  },
   chatSession: (sessionId, userMessage, questions, resume, company, department) =>
     request('/interviews/chat-session', {
       method: 'POST',

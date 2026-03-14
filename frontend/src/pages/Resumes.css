@@ -117,9 +117,13 @@
 
 .section h2 {
   font-size: 1.1rem;
-  margin-bottom: 16px;
-  color: var(--text-primary);
-  font-weight: 600;
+}
+
+.editing-hint {
+  margin: -8px 0 12px 0;
+  font-size: 13px;
+  color: var(--accent, #1da1f2);
+  font-weight: 500;
 }
 
 .app-form,

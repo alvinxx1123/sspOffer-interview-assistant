@@ -25,9 +25,12 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
         format_sql: true
 
-# 智谱 GLM 配置：正式环境请通过环境变量 ZHIPU_API_KEY 或 application-local.yml 覆盖（本文件不要写死真实密钥）
+# 智谱 GLM 与 Embedding：API Key 配置后，对话使用 GLM，RAG 向量使用智谱 Embedding-2（未配置则 RAG 使用本地 AllMiniLM）
 zhipu:
   apiKey: "${ZHIPU_API_KEY:}"
+  # embedding:
+  #   base-url: ""   # 可选，默认 https://open.bigmodel.cn/api/paas/v4
+  #   model: "embedding-2"
   # 主模型（对话、复盘等）: glm-4-flash, glm-4, glm-4.6v, glm-4.6v-flash 等
   model: glm-4.6v
   # 深挖问题生成专用：更快模型提速

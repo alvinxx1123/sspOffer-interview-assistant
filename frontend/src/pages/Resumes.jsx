@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../api/client'
 import './Resumes.css'
 
@@ -41,11 +41,18 @@ export default function Resumes() {
   const [appNotes, setAppNotes] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [saving, setSaving] = useState(false)
+  const appFormRef = useRef(null)
 
   useEffect(() => {
     loadResumes()
     loadApplications()
   }, [])
+
+  useEffect(() => {
+    if (editingId != null && appFormRef.current) {
+      appFormRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [editingId])
 
   const loadResumes = () => api.getResumes().then(setResumes).catch(console.error)
   const loadApplications = () => api.getApplications().then(setApplications).catch(console.error)
@@ -198,8 +205,11 @@ export default function Resumes() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" ref={appFormRef}>
         <h2>投递进度</h2>
+        {editingId != null && (
+          <p className="editing-hint">正在编辑：{appCompany || '当前记录'}</p>
+        )}
         <div className="app-form">
           <div className="form-row">
             <div className="form-group">

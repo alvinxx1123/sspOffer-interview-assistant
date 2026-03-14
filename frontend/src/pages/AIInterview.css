@@ -77,6 +77,57 @@
   min-height: 120px;
 }
 
+.thinking-steps {
+  margin-bottom: 24px;
+  padding: 16px 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.thinking-title {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.thinking-list {
+  margin: 0;
+  padding-left: 20px;
+  list-style: none;
+}
+
+.thinking-step {
+  position: relative;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.thinking-step:last-child {
+  margin-bottom: 0;
+}
+
+.thinking-dot {
+  position: absolute;
+  left: -18px;
+  top: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.thinking-dot-pulse {
+  animation: thinking-pulse 1s ease-in-out infinite;
+}
+
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
 .questions-result {
   padding: 24px;
   background: var(--bg-secondary);

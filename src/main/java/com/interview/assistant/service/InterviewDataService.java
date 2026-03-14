@@ -17,9 +17,10 @@ public class InterviewDataService {
         this.ragService = ragService;
     }
 
+    /** 保存后异步做 RAG 索引，与 saveAll 一致，避免单条保存被 Embedding 调用拖慢 1～3 秒 */
     public InterviewExperience save(InterviewExperience exp) {
         exp = repository.save(exp);
-        ragService.indexExperience(exp);
+        ragService.indexExperiencesAsync(List.of(exp));
         return exp;
     }
 

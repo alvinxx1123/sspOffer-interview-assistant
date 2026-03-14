@@ -1,5 +1,6 @@
 package com.interview.assistant.service;
 
+import com.interview.assistant.config.PromptTemplates;
 import com.interview.assistant.entity.InterviewChatMessage;
 import com.interview.assistant.entity.InterviewChatSession;
 import com.interview.assistant.repository.InterviewChatMessageRepository;
@@ -21,27 +22,13 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 面试深挖问题后的上下文探讨聊天服务，支持按会话记忆。
+ * 面试深挖问题后的上下文探讨聊天服务，支持按会话记忆；会话恢复时从 DB 灌回最近 N 条消息，兼顾不丢记忆与上下文上限。
  */
 @Service
 public class InterviewChatService {
 
-    private static final String SYSTEM_PROMPT = """
-        你是互联网大厂技术面试官，与候选人进行模拟面试。
-        
-        两种角色：
-        1. 面试官：候选人作答时，追问、点评或引导。
-        2. 答疑：候选人请你回答某题时，给出全面但简短的参考答案。
-        
-        答疑时要求：
-        - 答案控制在 300 字以内，只讲核心要点
-        - 用数字序号或简短小标题分点，少用或不用 * 符号
-        - 重点用 **加粗** 标出
-        - 禁止冗长啰嗦，禁止大段重复
-        - 直接给答案，不要「好的」「下面我来说」等开场
-        
-        用中文回答。
-        """;
+    /** 从 DB 恢复会话时最多灌回的消息条数（user+assistant 各算一条），避免上下文过长 */
+    private static final int MAX_RESTORE_MESSAGES = 20;
 
     private final ChatLanguageModel chatModel;
     private final RagService ragService;
@@ -69,16 +56,7 @@ public class InterviewChatService {
             throw new IllegalArgumentException("userMessage 不能为空");
         }
 
-        InterviewSession session = sessions.computeIfAbsent(sessionId, id -> {
-            StringBuilder system = new StringBuilder(SYSTEM_PROMPT);
-            if (questions != null && !questions.isBlank()) {
-                system.append("\n\n【本场面试深挖问题】\n").append(questions);
-            }
-            if (resume != null && !resume.isBlank()) {
-                system.append("\n\n【候选人简历】\n").append(resume.length() > 2000 ? resume.substring(0, 2000) + "..." : resume);
-            }
-            return new InterviewSession(system.toString());
-        });
+        InterviewSession session = sessions.computeIfAbsent(sessionId, id -> buildOrRestoreSession(id, questions, resume));
 
         synchronized (session) {
             session.memory.add(UserMessage.from(userMessage));
@@ -186,13 +164,38 @@ public class InterviewChatService {
                 .orElse(null);
     }
 
+    /** 新建或从 DB 恢复会话：若有历史消息则灌回最近 MAX_RESTORE_MESSAGES 条到 memory */
+    private InterviewSession buildOrRestoreSession(String sessionId, String questions, String resume) {
+        StringBuilder system = new StringBuilder(PromptTemplates.CHAT_SESSION_SYSTEM);
+        if (questions != null && !questions.isBlank()) {
+            system.append("\n\n【本场面试深挖问题】\n").append(questions);
+        }
+        if (resume != null && !resume.isBlank()) {
+            system.append("\n\n【候选人简历】\n").append(resume.length() > 2000 ? resume.substring(0, 2000) + "..." : resume);
+        }
+        MessageWindowChatMemory memory = MessageWindowChatMemory.withMaxMessages(MAX_RESTORE_MESSAGES);
+        sessionRepository.findBySessionId(sessionId).ifPresent(dbSession -> {
+            List<InterviewChatMessage> all = messageRepository.findBySession_IdOrderBySortOrderAscIdAsc(dbSession.getId());
+            int from = Math.max(0, all.size() - MAX_RESTORE_MESSAGES);
+            for (int i = from; i < all.size(); i++) {
+                InterviewChatMessage msg = all.get(i);
+                if ("user".equals(msg.getRole())) {
+                    memory.add(UserMessage.from(msg.getContent()));
+                } else if ("assistant".equals(msg.getRole())) {
+                    memory.add(AiMessage.from(msg.getContent()));
+                }
+            }
+        });
+        return new InterviewSession(system.toString(), memory);
+    }
+
     private static class InterviewSession {
         final String systemContext;
         final MessageWindowChatMemory memory;
 
-        InterviewSession(String systemContext) {
+        InterviewSession(String systemContext, MessageWindowChatMemory memory) {
             this.systemContext = systemContext;
-            this.memory = MessageWindowChatMemory.withMaxMessages(20);
+            this.memory = memory;
         }
     }
 }
