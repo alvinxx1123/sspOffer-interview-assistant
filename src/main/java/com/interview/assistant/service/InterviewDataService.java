@@ -2,6 +2,7 @@ package com.interview.assistant.service;
 
 import com.interview.assistant.entity.InterviewExperience;
 import com.interview.assistant.repository.InterviewExperienceRepository;
+import com.interview.assistant.capability.ExperienceCleaningCapability;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -11,20 +12,28 @@ public class InterviewDataService {
 
     private final InterviewExperienceRepository repository;
     private final RagService ragService;
+    private final ExperienceCleaningCapability experienceCleaningCapability;
 
-    public InterviewDataService(InterviewExperienceRepository repository, RagService ragService) {
+    public InterviewDataService(InterviewExperienceRepository repository,
+                                RagService ragService,
+                                ExperienceCleaningCapability experienceCleaningCapability) {
         this.repository = repository;
         this.ragService = ragService;
+        this.experienceCleaningCapability = experienceCleaningCapability;
     }
 
     /** 保存后异步做 RAG 索引，与 saveAll 一致，避免单条保存被 Embedding 调用拖慢 1～3 秒 */
     public InterviewExperience save(InterviewExperience exp) {
+        exp = experienceCleaningCapability.cleanExperience(exp);
         exp = repository.save(exp);
         ragService.indexExperiencesAsync(List.of(exp));
         return exp;
     }
 
     public List<InterviewExperience> saveAll(List<InterviewExperience> experiences) {
+        experiences = experiences.stream()
+                .map(experienceCleaningCapability::cleanExperience)
+                .toList();
         experiences = repository.saveAll(experiences);
         // 异步做 RAG 索引，避免上传时 AllMiniLM 首次加载/批量 embedding 导致超时 502
         ragService.indexExperiencesAsync(experiences);

@@ -7,6 +7,136 @@ function generateSessionId() {
   return 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11)
 }
 
+function parseJsonLike(value) {
+  if (!value) return null
+  if (typeof value === 'object') return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+function formatPlainText(value) {
+  return String(value || '')
+    .replace(/\*\*/g, '')
+    .replace(/\*/g, '')
+    .replace(/^\s*[-•]\s*/gm, '1. ')
+    .trim()
+}
+
+function normalizeThinkingStep(step) {
+  if (!step) return null
+  if (typeof step === 'string') {
+    return { title: '处理中', detail: step, stage: 'general', status: 'completed' }
+  }
+  return {
+    title: step.title || '处理中',
+    detail: step.detail || '',
+    stage: step.stage || 'general',
+    status: step.status || 'completed',
+  }
+}
+
+function renderList(items) {
+  const list = Array.isArray(items) ? items.filter(Boolean) : []
+  if (list.length === 0) return null
+  return (
+    <ol className="coach-list">
+      {list.map((item, index) => (
+        <li key={`${index}-${item}`}>{formatPlainText(item)}</li>
+      ))}
+    </ol>
+  )
+}
+
+function ComparisonBlock({ comparison }) {
+  if (!comparison) return null
+  return (
+    <div className="coach-block">
+      <div className="coach-title">系统历史对比分析</div>
+      <div className="coach-text">
+        历史样本：{comparison.historySampleSize ?? 0} 场 ｜ 历史平均：{comparison.previousAverageOverall ?? '-'} ｜ 本场差值：{comparison.overallDelta >= 0 ? '+' : ''}{comparison.overallDelta ?? 0}
+      </div>
+      {comparison.summary && <pre className="coach-pre">{formatPlainText(comparison.summary)}</pre>}
+      {renderList(comparison.improvedAreas) && (
+        <>
+          <div className="coach-subtitle">相比历史的进步</div>
+          {renderList(comparison.improvedAreas)}
+        </>
+      )}
+      {renderList(comparison.weakerAreas) && (
+        <>
+          <div className="coach-subtitle">相比历史的不足</div>
+          {renderList(comparison.weakerAreas)}
+        </>
+      )}
+      {renderList(comparison.stableAreas) && (
+        <>
+          <div className="coach-subtitle">保持稳定的方面</div>
+          {renderList(comparison.stableAreas)}
+        </>
+      )}
+      {renderList(comparison.reinforcementSuggestions) && (
+        <>
+          <div className="coach-subtitle">建议优先加强</div>
+          {renderList(comparison.reinforcementSuggestions)}
+        </>
+      )}
+    </div>
+  )
+}
+
+function ScoreBlock({ data, title = '评分', showComparison = false }) {
+  if (!data || data.error) return data?.error ? <div className="coach-text">{data.error}</div> : null
+  const scores = data.scores || {}
+  return (
+    <div className="coach-block">
+      <div className="coach-title">{title}</div>
+      <div className="coach-text">
+        总分：{data.overall ?? '-'}
+      </div>
+      {Object.keys(scores).length > 0 && (
+        <div className="coach-text">
+          维度：正确性 {scores.correctness ?? '-'} / 深度 {scores.depth ?? '-'} / 结构 {scores.structure ?? '-'} / 表达 {scores.communication ?? '-'} / 风险意识 {scores.risk ?? '-'}
+        </div>
+      )}
+      {data.summary && <pre className="coach-pre">{formatPlainText(data.summary)}</pre>}
+      {renderList(data.strengths) && (
+        <>
+          <div className="coach-subtitle">亮点</div>
+          {renderList(data.strengths)}
+        </>
+      )}
+      {renderList(data.weaknesses) && (
+        <>
+          <div className="coach-subtitle">不足</div>
+          {renderList(data.weaknesses)}
+        </>
+      )}
+      {renderList(data.improvements) && (
+        <>
+          <div className="coach-subtitle">改进建议</div>
+          {renderList(data.improvements)}
+        </>
+      )}
+      {renderList(data.keyPointsMissing) && (
+        <>
+          <div className="coach-subtitle">缺失关键点</div>
+          {renderList(data.keyPointsMissing)}
+        </>
+      )}
+      {renderList(data.studyTopics) && (
+        <>
+          <div className="coach-subtitle">建议补强</div>
+          {renderList(data.studyTopics)}
+        </>
+      )}
+      {showComparison && <ComparisonBlock comparison={data.comparison} />}
+    </div>
+  )
+}
+
 /** 助手回复 → 简化为「Markdown + 纯 URL」渲染，前端不再尝试修 HTML，只负责把 [标题](URL) / 裸 URL 变成 <a>。 */
 function formatAssistantContent(content) {
   if (!content) return ''
@@ -75,6 +205,16 @@ export default function AIInterview() {
   const [loadingSession, setLoadingSession] = useState(false)
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
+  const [endingSession, setEndingSession] = useState(false)
+  const [sessionReport, setSessionReport] = useState(null)
+  const [sessionReportLoading, setSessionReportLoading] = useState(false)
+
+  // 教练（多 Agent）：答疑 / 追问 / 评分
+  const [coachAnswer, setCoachAnswer] = useState('')
+  const [coachFollowups, setCoachFollowups] = useState('')
+  const [coachEval, setCoachEval] = useState(null)
+  const [coachLoading, setCoachLoading] = useState(false)
+
   const [loading, setLoading] = useState(false)
   const [thinkingSteps, setThinkingSteps] = useState([])
   const [parsingResume, setParsingResume] = useState(false)
@@ -105,26 +245,42 @@ export default function AIInterview() {
     setSessionId('')
     setSessionEnded(false)
     setChatMessages([])
+    setSessionReport(null)
+    setSessionReportLoading(false)
+    const nextSessionId = generateSessionId()
+    setSessionId(nextSessionId)
     try {
       await api.generateQuestionsStream(
         company || '',
         department || '',
         resumeContent || '',
         {
-          onStep: (step) => setThinkingSteps((prev) => [...prev, step]),
-          onResult: (text) => {
-            setQuestions(text || '')
-            setSessionId(generateSessionId())
+          onStep: (step) => {
+            const normalized = normalizeThinkingStep(step)
+            if (!normalized) return
+            setThinkingSteps((prev) => [...prev, normalized])
           },
-          onError: (msg) => setQuestions('生成失败: ' + (msg || '请检查网络或后端配置')),
+          onDelta: (chunk) => {
+            if (!chunk) return
+            setQuestions((prev) => `${prev}${chunk}`)
+          },
+          onResult: (text) => {
+            const nextQuestions = text || ''
+            setQuestions(nextQuestions)
+            setChatMessages([])
+          },
+          onError: (msg) => {
+            setQuestions((prev) => prev || ('生成失败: ' + (msg || '请检查网络或后端配置')))
+            setSessionId('')
+          },
         }
       )
     } catch (e) {
       console.error(e)
-      if (!questions) setQuestions('生成失败: ' + (e.message || '请检查网络或后端配置'))
+      setSessionId('')
+      setQuestions((prev) => prev || ('生成失败: ' + (e.message || '请检查网络或后端配置')))
     } finally {
       setLoading(false)
-      setThinkingSteps([])
     }
   }
 
@@ -146,6 +302,64 @@ export default function AIInterview() {
     }
   }
 
+  const getLastQnA = () => {
+    const lastUser = [...chatMessages].reverse().find((m) => m.role === 'user')
+    const lastAssistant = [...chatMessages].reverse().find((m) => m.role === 'assistant')
+    return { question: lastAssistant?.content || '', answer: lastUser?.content || '' }
+  }
+
+  const coachDoEvaluate = async () => {
+    if (coachLoading) return
+    const { question, answer } = getLastQnA()
+    if (!question.trim() || !answer.trim()) return
+    setCoachLoading(true)
+    setCoachEval(null)
+    try {
+      const res = await api.coachEvaluate(question, answer, resumeContent || '', company || '', department || '')
+      setCoachEval(parseJsonLike(res) || res || null)
+    } catch (e) {
+      console.error(e)
+      setCoachEval({ error: e?.message || '评分失败' })
+    } finally {
+      setCoachLoading(false)
+    }
+  }
+
+  const coachDoFollowups = async () => {
+    if (coachLoading) return
+    const { question, answer } = getLastQnA()
+    if (!question.trim() || !answer.trim()) return
+    setCoachLoading(true)
+    setCoachFollowups('')
+    try {
+      const res = await api.coachFollowups(question, answer, company || '', department || '')
+      setCoachFollowups(formatPlainText(res?.followups || ''))
+    } catch (e) {
+      console.error(e)
+      setCoachFollowups('生成追问失败: ' + (e?.message || ''))
+    } finally {
+      setCoachLoading(false)
+    }
+  }
+
+  const coachDoAnswer = async () => {
+    if (coachLoading) return
+    const { question } = getLastQnA()
+    if (!question.trim()) return
+    setCoachLoading(true)
+    setCoachAnswer('')
+    try {
+      const res = await api.coachAnswer(question, resumeContent || '', company || '', department || '')
+      setCoachAnswer(formatPlainText(res?.answer || ''))
+    } catch (e) {
+      console.error(e)
+      setCoachAnswer('答疑失败: ' + (e?.message || ''))
+    } finally {
+      setCoachLoading(false)
+    }
+  }
+
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
@@ -160,11 +374,45 @@ export default function AIInterview() {
     loadHistory()
   }, [])
 
-  const endSession = () => {
-    if (!sessionId || sessionEnded) return
+  const pollSessionReport = async (sid) => {
+    setSessionReportLoading(true)
+    setSessionReport(null)
+    for (let i = 0; i < 8; i++) {
+      try {
+        const detail = await api.getChatSession(sid)
+        if (detail?.overallScore != null || detail?.reportSummary || detail?.reportJson) {
+          setSessionReport({
+            ...detail,
+            parsedReport: parseJsonLike(detail?.reportJson),
+          })
+          setSessionReportLoading(false)
+          loadHistory()
+          return
+        }
+      } catch (e) {
+        console.error('获取面试报告失败', e)
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+    }
+    setSessionReportLoading(false)
+  }
+
+  const endSession = async () => {
+    if (!sessionId || sessionEnded || endingSession) return
     setSessionEnded(true)
+    setEndingSession(true)
     const sid = sessionId
-    api.endChatSession(sid, questions, resumeContent, company, department).then(loadHistory).catch(console.error)
+    try {
+      await api.endChatSession(sid, questions, resumeContent, company, department)
+      loadHistory()
+      await pollSessionReport(sid)
+    } catch (e) {
+      console.error(e)
+      setSessionEnded(false)
+      alert('结束会话失败：' + (e?.message || '请重试'))
+    } finally {
+      setEndingSession(false)
+    }
   }
 
   const sendToolsChat = async () => {
@@ -320,8 +568,11 @@ export default function AIInterview() {
           <ul className="thinking-list">
             {thinkingSteps.map((step, i) => (
               <li key={i} className="thinking-step">
-                <span className="thinking-dot" />
-                {step}
+                <span className={`thinking-dot ${step.status === 'in_progress' ? 'thinking-dot-pulse' : ''}`} />
+                <div className="thinking-step-body">
+                  <div className="thinking-step-title">{step.title}</div>
+                  {step.detail && <div className="thinking-step-detail">{step.detail}</div>}
+                </div>
               </li>
             ))}
             {loading && thinkingSteps.length === 0 && (
@@ -338,6 +589,9 @@ export default function AIInterview() {
         <>
           <div className="questions-result">
             <h2>生成的面试问题</h2>
+            {loading && (
+              <div className="questions-streaming-tag">题单流式生成中...</div>
+            )}
             <pre className="questions-text">{questions}</pre>
           </div>
 
@@ -346,13 +600,59 @@ export default function AIInterview() {
               <div className="chat-header">
                 <h2>与面试官探讨</h2>
                 {!sessionEnded && (
-                  <button className="btn-secondary btn-end-session" onClick={endSession}>
-                    结束当前会话
+                  <button className="btn-secondary btn-end-session" onClick={endSession} disabled={endingSession}>
+                    {endingSession ? '结束中...' : '结束当前会话并评分'}
                   </button>
                 )}
                 {sessionEnded && <span className="session-ended-tag">会话已保存</span>}
               </div>
-              <p className="chat-hint">针对以上问题作答或提问；也可粘贴问题请面试官给答案供你学习。AI 会根据意图追问或答疑</p>
+              <p className="chat-hint">上面已经一次性生成了整套题单，覆盖实习、项目、Java 八股和 AI/Agent/LLM 等方向。你可以按自己的节奏挑题作答；这里的面试官会基于你的回答继续深挖，不会再重新给整套题目。点击“结束当前会话并评分”后，再生成整场总结与分数。</p>
+              <div className="coach-panel">
+                <div className="coach-block">
+                  <div className="coach-title">辅助功能</div>
+                  <div className="coach-text">这些功能不会改变主流程，仅用于你在练习时查看当前回答点评、可继续深挖的问题和参考答案。</div>
+                  <div className="coach-actions">
+                    <button className="btn-secondary btn-sm" onClick={coachDoEvaluate} disabled={coachLoading || chatMessages.length < 2}>当前回答点评</button>
+                    <button className="btn-secondary btn-sm" onClick={coachDoFollowups} disabled={coachLoading || chatMessages.length < 2}>查看可继续深挖点</button>
+                    <button className="btn-secondary btn-sm" onClick={coachDoAnswer} disabled={coachLoading || chatMessages.length < 1}>查看参考答案</button>
+                    {coachLoading && <span className="coach-loading">处理中...</span>}
+                  </div>
+                </div>
+              </div>
+              {(sessionReportLoading || sessionReport) && (
+                <div className="coach-panel">
+                  {sessionReportLoading && (
+                    <div className="coach-block">
+                      <div className="coach-title">本场完整面试评价</div>
+                      <div className="coach-text">正在整理本场完整面试表现，请稍候...</div>
+                    </div>
+                  )}
+                  {sessionReport && (
+                    <>
+                      <ScoreBlock data={sessionReport.parsedReport} title="本场完整面试评价" />
+                      <ComparisonBlock comparison={sessionReport.parsedReport?.comparison} />
+                    </>
+                  )}
+                </div>
+              )}
+              {(coachEval || coachFollowups || coachAnswer) && (
+                <div className="coach-panel">
+                  {coachEval && <ScoreBlock data={coachEval} title="当前回答点评" />}
+                  {coachFollowups && (
+                    <div className="coach-block">
+                      <div className="coach-title">可继续深挖的问题</div>
+                      <pre className="coach-pre">{formatPlainText(coachFollowups)}</pre>
+                    </div>
+                  )}
+                  {coachAnswer && (
+                    <div className="coach-block">
+                      <div className="coach-title">参考答案</div>
+                      <pre className="coach-pre">{formatPlainText(coachAnswer)}</pre>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="chat-messages">
                 {chatMessages.map((m, i) => (
                   <div key={i} className={`chat-msg ${m.role}`}>
@@ -380,7 +680,7 @@ export default function AIInterview() {
                       sendChat()
                     }
                   }}
-                  placeholder="输入你的回答或提问（Enter 发送，Shift+Enter 换行）"
+                  placeholder="输入你对某一道题的回答，或贴出题号后作答（Enter 发送，Shift+Enter 换行）"
                   rows={2}
                   disabled={chatLoading}
                 />
@@ -389,7 +689,7 @@ export default function AIInterview() {
                   onClick={sendChat}
                   disabled={chatLoading || !chatInput.trim()}
                 >
-                  发送
+                  继续面试
                 </button>
               </div>
               )}
@@ -507,6 +807,12 @@ export default function AIInterview() {
                 )}
                 {viewingSession && !viewingSession._error && (
                   <div className="session-detail-messages">
+                    {(viewingSession.overallScore != null || viewingSession.reportSummary || viewingSession.reportJson) && (
+                      <>
+                        <ScoreBlock data={parseJsonLike(viewingSession.reportJson)} title="本场完整面试评价" />
+                        <ComparisonBlock comparison={parseJsonLike(viewingSession.reportJson)?.comparison} />
+                      </>
+                    )}
                     <h4>问答记录</h4>
                     {(viewingSession.messages || []).length > 0 ? (
                       (viewingSession.messages || []).map((m, i) => (

@@ -34,6 +34,8 @@ public class InterviewChatService {
     private final RagService ragService;
     private final InterviewChatSessionRepository sessionRepository;
     private final InterviewChatMessageRepository messageRepository;
+    private final InterviewCoachingService coachingService;
+    private final SkillPackService skillPackService;
 
     /** sessionId -> 会话上下文（含记忆和面试背景） */
     private final Map<String, InterviewSession> sessions = new ConcurrentHashMap<>();
@@ -41,11 +43,15 @@ public class InterviewChatService {
     public InterviewChatService(@Qualifier("interviewChatModel") ChatLanguageModel chatModel,
                                RagService ragService,
                                InterviewChatSessionRepository sessionRepository,
-                               InterviewChatMessageRepository messageRepository) {
+                               InterviewChatMessageRepository messageRepository,
+                               InterviewCoachingService coachingService,
+                               SkillPackService skillPackService) {
         this.chatModel = chatModel;
         this.ragService = ragService;
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
+        this.coachingService = coachingService;
+        this.skillPackService = skillPackService;
     }
 
     public String chat(String sessionId, String userMessage, String questions, String resume, String company, String department) {
@@ -123,6 +129,8 @@ public class InterviewChatService {
         });
         dbSession.setEndedAt(java.time.LocalDateTime.now());
         sessionRepository.save(dbSession);
+        // 异步生成本场面试报告（评分/总结/历史对比）
+        coachingService.generateSessionReportAsync(sessionId);
         sessions.remove(sessionId);
     }
 
@@ -140,12 +148,12 @@ public class InterviewChatService {
         });
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public InterviewChatSession getSessionById(Long id) {
         return sessionRepository.findById(id)
                 .map(s -> {
                     s.getMessages().size();
-                    return s;
+                    return coachingService.ensureComparisonInReport(s);
                 })
                 .orElse(null);
     }
@@ -154,12 +162,12 @@ public class InterviewChatService {
         return sessionRepository.findAllByOrderByCreatedAtDesc();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public InterviewChatSession getSession(String sessionId) {
         return sessionRepository.findBySessionId(sessionId)
                 .map(s -> {
                     s.getMessages().size(); // 触发懒加载
-                    return s;
+                    return coachingService.ensureComparisonInReport(s);
                 })
                 .orElse(null);
     }
@@ -167,6 +175,10 @@ public class InterviewChatService {
     /** 新建或从 DB 恢复会话：若有历史消息则灌回最近 MAX_RESTORE_MESSAGES 条到 memory */
     private InterviewSession buildOrRestoreSession(String sessionId, String questions, String resume) {
         StringBuilder system = new StringBuilder(PromptTemplates.CHAT_SESSION_SYSTEM);
+        String flowSkill = skillPackService.getPromptAddendum("interview-flow-skill");
+        if (!flowSkill.isBlank()) {
+            system.append("\n\n【面试流程补充规则】\n").append(flowSkill);
+        }
         if (questions != null && !questions.isBlank()) {
             system.append("\n\n【本场面试深挖问题】\n").append(questions);
         }

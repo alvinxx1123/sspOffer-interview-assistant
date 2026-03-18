@@ -2,6 +2,7 @@ package com.interview.assistant.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.interview.assistant.capability.ExperienceCleaningCapability;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,6 +11,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,6 +41,11 @@ public class ImageParseService {
     @Value("${zhipu.visionModel:glm-4v-plus}")
     private String visionModel;
 
+    @Value("${zhipu.visionFallbackModels:glm-4.6v}")
+    private String visionFallbackModels;
+
+    private final ExperienceCleaningCapability experienceCleaningCapability;
+    private final SkillPackService skillPackService;
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -56,64 +71,71 @@ public class ImageParseService {
         只返回 JSON，不要其他说明。
         """;
 
+    public ImageParseService(ExperienceCleaningCapability experienceCleaningCapability,
+                             SkillPackService skillPackService) {
+        this.experienceCleaningCapability = experienceCleaningCapability;
+        this.skillPackService = skillPackService;
+    }
+
     public Map<String, Object> parseImage(MultipartFile image) {
         String key = (apiKey != null && !apiKey.isEmpty()) ? apiKey : System.getenv("ZHIPU_API_KEY");
         if (key == null || key.isEmpty()) {
             throw new IllegalStateException("智谱 API Key 未配置，无法解析图片");
         }
         try {
-            String base64 = Base64.getEncoder().encodeToString(image.getBytes());
-            String mime = image.getContentType();
-            if (mime == null) mime = "image/jpeg";
-            String dataUrl = "data:" + mime + ";base64," + base64;
+            PreparedImage preparedImage = prepareImageForVision(image);
+            String dataUrl = "data:" + preparedImage.mimeType() + ";base64," +
+                    Base64.getEncoder().encodeToString(preparedImage.bytes());
 
-            Map<String, Object> body = new HashMap<>();
-            body.put("model", visionModel);
-            body.put("max_tokens", 2048);
-            body.put("temperature", 0.3);
-            body.put("messages", java.util.List.of(
-                Map.of(
-                    "role", "user",
-                    "content", java.util.List.of(
-                        Map.of("type", "image_url", "image_url", Map.of("url", dataUrl)),
-                        Map.of("type", "text", "text", PARSE_PROMPT)
-                    )
-                )
-            ));
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(key);
-
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
-            ResponseEntity<String> resp;
-            try {
-                resp = restTemplate.exchange(
-                    ZHIPU_VISION_URL,
-                    HttpMethod.POST,
-                    entity,
-                    String.class
-                );
-            } catch (org.springframework.web.client.HttpClientErrorException ex) {
-                String errBody = ex.getResponseBodyAsString();
-                String detail = "";
+            String content = null;
+            RuntimeException lastError = null;
+            for (String modelName : buildVisionModelCandidates()) {
                 try {
-                    JsonNode err = objectMapper.readTree(errBody);
-                    if (err.has("error") && err.get("error").has("message")) {
-                        detail = err.get("error").path("message").asText();
-                    } else if (err.has("error")) {
-                        detail = err.get("error").toString();
+                    Map<String, Object> body = new HashMap<>();
+                    body.put("model", modelName);
+                    body.put("max_tokens", 2048);
+                    body.put("temperature", 0.3);
+                    body.put("messages", java.util.List.of(
+                            Map.of(
+                                    "role", "user",
+                                    "content", java.util.List.of(
+                                            Map.of("type", "image_url", "image_url", Map.of("url", dataUrl)),
+                                            Map.of("type", "text", "text", buildParsePrompt())
+                                    )
+                            )
+                    ));
+
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.setContentType(MediaType.APPLICATION_JSON);
+                    headers.setBearerAuth(key);
+
+                    HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+                    ResponseEntity<String> resp = restTemplate.exchange(
+                            ZHIPU_VISION_URL,
+                            HttpMethod.POST,
+                            entity,
+                            String.class
+                    );
+
+                    if (resp.getStatusCode().isError()) {
+                        throw new RuntimeException("智谱 API 调用失败: " + resp.getStatusCode());
                     }
-                } catch (Exception ignored) { detail = errBody != null ? errBody : ex.getMessage(); }
-                throw new RuntimeException("智谱 API 调用失败: " + ex.getStatusCode() + (detail.isEmpty() ? "" : " " + detail));
-            }
 
-            if (resp.getStatusCode().isError()) {
-                throw new RuntimeException("智谱 API 调用失败: " + resp.getStatusCode());
+                    JsonNode root = objectMapper.readTree(resp.getBody());
+                    content = root.path("choices").get(0).path("message").path("content").asText();
+                    break;
+                } catch (org.springframework.web.client.HttpClientErrorException ex) {
+                    String detail = extractErrorDetail(ex.getResponseBodyAsString(), ex.getMessage());
+                    lastError = new RuntimeException("模型 " + modelName + " 解析失败: " + detail, ex);
+                    log.warn("图片面经解析调用失败, model={}, detail={}", modelName, detail);
+                }
             }
-
-            JsonNode root = objectMapper.readTree(resp.getBody());
-            String content = root.path("choices").get(0).path("message").path("content").asText();
+            if (content == null) {
+                if (lastError != null) {
+                    throw new RuntimeException(lastError.getMessage(), lastError);
+                }
+                throw new RuntimeException("未能成功调用视觉模型解析图片");
+            }
             content = content.trim();
             if (content.startsWith("```")) {
                 int start = content.indexOf("{");
@@ -124,6 +146,7 @@ public class ImageParseService {
             @SuppressWarnings("unchecked")
             Map<String, Object> parsed = objectMapper.readValue(content, Map.class);
             normalizeParsedBaguAndAlgo(parsed);
+            experienceCleaningCapability.cleanParsedPayload(parsed);
             return parsed;
         } catch (Exception e) {
             log.error("图片解析失败", e);
@@ -157,4 +180,110 @@ public class ImageParseService {
         }
         return String.join("\n", lines);
     }
+
+    private String buildParsePrompt() {
+        String addendum = skillPackService.getPromptAddendum("experience-cleaning-skill");
+        if (addendum == null || addendum.isBlank()) return PARSE_PROMPT;
+        return PARSE_PROMPT + "\n\n【清洗补充规则】\n" + addendum;
+    }
+
+    private List<String> buildVisionModelCandidates() {
+        List<String> models = new ArrayList<>();
+        if (visionModel != null && !visionModel.isBlank()) {
+            models.add(visionModel.trim());
+        }
+        if (visionFallbackModels != null && !visionFallbackModels.isBlank()) {
+            for (String model : visionFallbackModels.split(",")) {
+                String trimmed = model.trim();
+                if (!trimmed.isEmpty() && !models.contains(trimmed)) {
+                    models.add(trimmed);
+                }
+            }
+        }
+        return models;
+    }
+
+    private String extractErrorDetail(String errBody, String fallback) {
+        try {
+            JsonNode err = objectMapper.readTree(errBody);
+            if (err.has("error") && err.get("error").has("message")) {
+                return err.get("error").path("message").asText();
+            }
+            if (err.has("error")) {
+                return err.get("error").toString();
+            }
+        } catch (Exception ignored) {}
+        return fallback != null ? fallback : "未知错误";
+    }
+
+    private PreparedImage prepareImageForVision(MultipartFile file) {
+        try {
+            byte[] original = file.getBytes();
+            BufferedImage source = ImageIO.read(new ByteArrayInputStream(original));
+            if (source == null) {
+                return new PreparedImage(original, "image/jpeg");
+            }
+            BufferedImage normalized = resizeIfNeeded(source, 1800);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageWriter writer = ImageIO.getImageWritersByFormatName("jpeg").next();
+            try (ImageOutputStream ios = ImageIO.createImageOutputStream(baos)) {
+                writer.setOutput(ios);
+                ImageWriteParam param = writer.getDefaultWriteParam();
+                if (param.canWriteCompressed()) {
+                    param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                    param.setCompressionQuality(0.82f);
+                }
+                writer.write(null, new IIOImage(normalized, null, null), param);
+            } finally {
+                writer.dispose();
+            }
+            return new PreparedImage(baos.toByteArray(), "image/jpeg");
+        } catch (Exception e) {
+            log.warn("图片预处理失败，回退原图上传: {}", e.getMessage());
+            try {
+                return new PreparedImage(file.getBytes(), "image/jpeg");
+            } catch (Exception ex) {
+                throw new RuntimeException("读取图片失败: " + ex.getMessage(), ex);
+            }
+        }
+    }
+
+    private BufferedImage resizeIfNeeded(BufferedImage source, int maxWidth) {
+        int width = source.getWidth();
+        int height = source.getHeight();
+        if (width <= maxWidth) {
+            return toJpegSafeImage(source, width, height);
+        }
+        int targetWidth = maxWidth;
+        int targetHeight = Math.max(1, (int) Math.round(height * (maxWidth / (double) width)));
+        Image scaled = source.getScaledInstance(targetWidth, targetHeight, Image.SCALE_SMOOTH);
+        BufferedImage output = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = output.createGraphics();
+        try {
+            g.setColor(Color.WHITE);
+            g.fillRect(0, 0, targetWidth, targetHeight);
+            g.drawImage(scaled, 0, 0, null);
+        } finally {
+            g.dispose();
+        }
+        return output;
+    }
+
+    private BufferedImage toJpegSafeImage(BufferedImage source, int width, int height) {
+        if (source.getType() == BufferedImage.TYPE_INT_RGB) {
+            return source;
+        }
+        BufferedImage output = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = output.createGraphics();
+        try {
+            g.setColor(Color.WHITE);
+            g.fillRect(0, 0, width, height);
+            g.drawImage(source, 0, 0, null);
+        } finally {
+            g.dispose();
+        }
+        return output;
+    }
+
+    private record PreparedImage(byte[] bytes, String mimeType) {}
 }

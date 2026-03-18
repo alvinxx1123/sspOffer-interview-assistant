@@ -93,6 +93,15 @@ public class InterviewEmbeddingStore implements EmbeddingStore<TextSegment> {
         entries.clear();
     }
 
+
+
+    /** 返回当前所有 TextSegment（仅用于关键词召回/统计等非向量检索场景） */
+    public List<TextSegment> allSegments() {
+        return entries.stream()
+                .map(e -> e.segment)
+                .filter(s -> s != null)
+                .collect(Collectors.toList());
+    }
     @Override
     public List<EmbeddingMatch<TextSegment>> findRelevant(Embedding referenceEmbedding, int maxResults, double minScore) {
         float[] ref = referenceEmbedding.vector();

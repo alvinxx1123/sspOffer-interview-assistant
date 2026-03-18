@@ -40,6 +40,22 @@ public class InterviewChatSession {
     @JsonView(Views.List.class)
     private LocalDateTime endedAt;
 
+    // --------- 面试报告/评分（会话结束后生成） ---------
+
+    @JsonView(Views.List.class)
+    private Integer overallScore; // 0-100
+
+    @JsonView(Views.List.class)
+    private Integer improvementDelta; // 相对历史均值的提升/下降
+
+    @Column(columnDefinition = "TEXT")
+    @JsonView(Views.Detail.class)
+    private String reportJson; // 结构化报告 JSON
+
+    @Column(columnDefinition = "TEXT")
+    @JsonView(Views.Detail.class)
+    private String reportSummary; // 人类可读总结
+
     @OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("sortOrder ASC, id ASC")
     @JsonView(Views.Detail.class)
@@ -66,6 +82,16 @@ public class InterviewChatSession {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getEndedAt() { return endedAt; }
     public void setEndedAt(LocalDateTime endedAt) { this.endedAt = endedAt; }
+
+    public Integer getOverallScore() { return overallScore; }
+    public void setOverallScore(Integer overallScore) { this.overallScore = overallScore; }
+    public Integer getImprovementDelta() { return improvementDelta; }
+    public void setImprovementDelta(Integer improvementDelta) { this.improvementDelta = improvementDelta; }
+    public String getReportJson() { return reportJson; }
+    public void setReportJson(String reportJson) { this.reportJson = reportJson; }
+    public String getReportSummary() { return reportSummary; }
+    public void setReportSummary(String reportSummary) { this.reportSummary = reportSummary; }
+
     public List<InterviewChatMessage> getMessages() { return messages; }
     public void setMessages(List<InterviewChatMessage> messages) { this.messages = messages; }
 }

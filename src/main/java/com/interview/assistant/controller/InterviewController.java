@@ -1,5 +1,4 @@
 package com.interview.assistant.controller;
-
 import com.interview.assistant.entity.InterviewChatSession;
 import com.interview.assistant.entity.InterviewExperience;
 import com.interview.assistant.service.InterviewDataService;
@@ -7,6 +6,7 @@ import com.interview.assistant.service.InterviewAgentService;
 import com.interview.assistant.service.InterviewAgentWithToolsService;
 import com.interview.assistant.service.InterviewChatService;
 import com.interview.assistant.service.ImageParseService;
+import com.interview.assistant.service.InterviewCoachingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,15 +35,18 @@ public class InterviewController {
     private final InterviewAgentWithToolsService agentWithToolsService;
     private final InterviewChatService interviewChatService;
     private final ImageParseService imageParseService;
+    private final InterviewCoachingService coachingService;
 
     public InterviewController(InterviewDataService interviewDataService, InterviewAgentService agentService,
                               InterviewAgentWithToolsService agentWithToolsService,
-                              InterviewChatService interviewChatService, ImageParseService imageParseService) {
+                              InterviewChatService interviewChatService, ImageParseService imageParseService,
+                              InterviewCoachingService coachingService) {
         this.interviewDataService = interviewDataService;
         this.agentService = agentService;
         this.agentWithToolsService = agentWithToolsService;
         this.interviewChatService = interviewChatService;
         this.imageParseService = imageParseService;
+        this.coachingService = coachingService;
     }
 
     /** 图片解析：上传面经截图，大模型提取结构化内容 */
@@ -92,7 +95,7 @@ public class InterviewController {
         }
     }
 
-    /** 深挖问题 SSE 流式：先推送步骤（链式思考），再推送完整结果 */
+    /** 深挖问题 SSE 流式：先推送更细的阶段事件，再流式推送题单文本，最后补发完整结果 */
     @PostMapping(value = "/questions/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter generateQuestionsStream(@RequestBody Map<String, String> request) {
         String company = request != null ? request.get("company") : null;
@@ -102,13 +105,25 @@ public class InterviewController {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         executor.execute(() -> {
             try {
-                String result = agentService.generateInterviewQuestionsWithSteps(company, department, resume, step -> {
-                    try {
-                        emitter.send(SseEmitter.event().name("step").data(step));
-                    } catch (IOException e) {
-                        log.warn("SSE send step failed", e);
-                    }
-                });
+                String result = agentService.generateInterviewQuestionsStreaming(
+                        company, department, resume,
+                        new InterviewAgentService.QuestionStreamCallbacks(
+                                step -> {
+                                    try {
+                                        emitter.send(SseEmitter.event().name("step").data(formatStep(step)));
+                                    } catch (IOException e) {
+                                        log.warn("SSE send step failed", e);
+                                    }
+                                },
+                                delta -> {
+                                    try {
+                                        emitter.send(SseEmitter.event().name("delta").data(delta != null ? delta : ""));
+                                    } catch (IOException e) {
+                                        log.warn("SSE send delta failed", e);
+                                    }
+                                }
+                        )
+                );
                 emitter.send(SseEmitter.event().name("result").data(result != null ? result : ""));
             } catch (Exception e) {
                 log.error("generateQuestionsStream failed", e);
@@ -130,6 +145,67 @@ public class InterviewController {
         return emitter;
     }
 
+    private String formatStep(InterviewAgentService.QuestionGenerationStep step) {
+        if (step == null) return "";
+        String title = step.title() != null ? step.title().trim() : "";
+        String detail = step.detail() != null ? step.detail().trim() : "";
+        if (title.isEmpty()) return detail;
+        if (detail.isEmpty()) return title;
+        return title + "： " + detail;
+    }
+
+
+
+    // --------- 多 Agent：答疑 / 追问 / 教练评分 ---------
+
+    @PostMapping("/coach/answer")
+    public ResponseEntity<?> coachAnswer(@RequestBody Map<String, String> request) {
+        String question = request != null ? request.getOrDefault("question", "") : "";
+        String resume = request != null ? request.getOrDefault("resume", "") : "";
+        String company = request != null ? request.getOrDefault("company", "") : "";
+        String department = request != null ? request.getOrDefault("department", "") : "";
+        if (question.isBlank()) return ResponseEntity.badRequest().body(Map.of("error", "question 不能为空"));
+        try {
+            String ans = coachingService.answerQuestion(question, resume, company, department);
+            return ResponseEntity.ok(Map.of("answer", ans));
+        } catch (Exception e) {
+            log.error("coachAnswer failed", e);
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage() != null ? e.getMessage() : "答疑失败"));
+        }
+    }
+
+    @PostMapping("/coach/followups")
+    public ResponseEntity<?> coachFollowups(@RequestBody Map<String, String> request) {
+        String question = request != null ? request.getOrDefault("question", "") : "";
+        String answer = request != null ? request.getOrDefault("answer", "") : "";
+        String company = request != null ? request.getOrDefault("company", "") : "";
+        String department = request != null ? request.getOrDefault("department", "") : "";
+        if (question.isBlank() || answer.isBlank()) return ResponseEntity.badRequest().body(Map.of("error", "question 和 answer 不能为空"));
+        try {
+            String res = coachingService.generateFollowups(question, answer, company, department);
+            return ResponseEntity.ok(Map.of("followups", res));
+        } catch (Exception e) {
+            log.error("coachFollowups failed", e);
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage() != null ? e.getMessage() : "生成追问失败"));
+        }
+    }
+
+    @PostMapping("/coach/evaluate")
+    public ResponseEntity<?> coachEvaluate(@RequestBody Map<String, String> request) {
+        String question = request != null ? request.getOrDefault("question", "") : "";
+        String answer = request != null ? request.getOrDefault("answer", "") : "";
+        String resume = request != null ? request.getOrDefault("resume", "") : "";
+        String company = request != null ? request.getOrDefault("company", "") : "";
+        String department = request != null ? request.getOrDefault("department", "") : "";
+        if (question.isBlank() || answer.isBlank()) return ResponseEntity.badRequest().body(Map.of("error", "question 和 answer 不能为空"));
+        try {
+            var eval = coachingService.evaluateAnswer(question, answer, resume, company, department);
+            return ResponseEntity.ok(eval);
+        } catch (Exception e) {
+            log.error("coachEvaluate failed", e);
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage() != null ? e.getMessage() : "评分失败"));
+        }
+    }
     @PostMapping("/experiences")
     public ResponseEntity<?> addExperiences(@RequestBody List<InterviewExperience> experiences) {
         log.info("POST /experiences 收到请求, 条数: {}", experiences == null ? 0 : experiences.size());

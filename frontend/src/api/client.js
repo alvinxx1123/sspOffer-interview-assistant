@@ -154,8 +154,8 @@ export const api = {
     const text = await res.text()
     return text || null
   },
-  /** 深挖问题 SSE 流式：onStep(步骤文案)、onResult(完整文本)、onError(错误信息) */
-  generateQuestionsStream: async (company, department, resume, { onStep, onResult, onError }) => {
+  /** 深挖问题 SSE 流式：onStep(阶段对象/文案)、onDelta(增量文本)、onResult(完整文本)、onError(错误信息) */
+  generateQuestionsStream: async (company, department, resume, { onStep, onDelta, onResult, onError }) => {
     const base = API_BASE.endsWith('/') ? API_BASE.slice(0, -1) : API_BASE
     const directUrl = 'http://127.0.0.1:8080/api/interviews/questions/stream'
     const proxyUrl = base.startsWith('http') ? `${base}/interviews/questions/stream` : `${base}/interviews/questions/stream`
@@ -189,10 +189,16 @@ export const api = {
     let dataLines = []
     const flushData = () => {
       if (!currentEvent || dataLines.length === 0) return
-      const data = dataLines.join('\n').trim()
-      if (currentEvent === 'step') onStep?.(data)
-      else if (currentEvent === 'result') onResult?.(data)
-      else if (currentEvent === 'error') onError?.(data)
+      const raw = dataLines.join('\n').replace(/^\[DONE\]\s*$/, '')
+      if (currentEvent === 'step') {
+        let parsed = raw
+        try {
+          parsed = JSON.parse(raw)
+        } catch {}
+        onStep?.(parsed)
+      } else if (currentEvent === 'delta') onDelta?.(raw)
+      else if (currentEvent === 'result') onResult?.(raw)
+      else if (currentEvent === 'error') onError?.(raw.trim())
       dataLines = []
       currentEvent = ''
     }
@@ -208,7 +214,7 @@ export const api = {
             flushData()
             currentEvent = line.slice(6).trim()
           } else if (line.startsWith('data:')) {
-            dataLines.push(line.slice(5).replace(/^\[DONE\]\s*$/, '').trim())
+            dataLines.push(line.slice(5).replace(/^ /, ''))
           } else if (line.trim() === '') {
             flushData()
           }
@@ -216,8 +222,8 @@ export const api = {
       }
       flushData()
       if (buf.startsWith('data:')) {
-        dataLines.push(buf.slice(5).trim())
-        if (currentEvent === 'result') flushData()
+        dataLines.push(buf.slice(5).replace(/^ /, ''))
+        if (currentEvent === 'result' || currentEvent === 'delta') flushData()
       }
     } finally {
       reader.releaseLock()
@@ -233,6 +239,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ sessionId, questions: questions || '', resume: resume || '', company: company || '', department: department || '' }),
     }),
+
+  // 多 Agent：答疑 / 追问 / 教练评分
+  coachAnswer: (question, resume, company, department) =>
+    request('/interviews/coach/answer', {
+      method: 'POST',
+      body: JSON.stringify({ question, resume: resume || '', company: company || '', department: department || '' }),
+    }),
+  coachFollowups: (question, answer, company, department) =>
+    request('/interviews/coach/followups', {
+      method: 'POST',
+      body: JSON.stringify({ question, answer, company: company || '', department: department || '' }),
+    }),
+  coachEvaluate: (question, answer, resume, company, department) =>
+    request('/interviews/coach/evaluate', {
+      method: 'POST',
+      body: JSON.stringify({ question, answer, resume: resume || '', company: company || '', department: department || '' }),
+    }),
+
   getChatSessions: () => request('/interviews/chat-sessions'),
   getChatSession: (sessionId) => request(`/interviews/chat-sessions/${encodeURIComponent(sessionId)}`),
   getChatSessionById: (id) => request(`/interviews/chat-sessions/by-id/${id}`),

@@ -1,7 +1,9 @@
 package com.interview.assistant.config;
 
 import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -61,6 +63,20 @@ public class LlmConfig {
         }
         String key = (apiKey != null && !apiKey.isEmpty()) ? apiKey : System.getenv("ZHIPU_API_KEY");
         return OpenAiChatModel.builder()
+                .baseUrl(ZHIPU_BASE_URL)
+                .apiKey(key)
+                .modelName(qModel)
+                .temperature(0.7)
+                .maxTokens(8192)
+                .timeout(Duration.ofMinutes(2))
+                .build();
+    }
+
+    @Bean("questionStreamingChatModel")
+    public StreamingChatLanguageModel questionStreamingChatModel() {
+        String qModel = (questionModel != null && !questionModel.isBlank()) ? questionModel : model;
+        String key = (apiKey != null && !apiKey.isEmpty()) ? apiKey : System.getenv("ZHIPU_API_KEY");
+        return OpenAiStreamingChatModel.builder()
                 .baseUrl(ZHIPU_BASE_URL)
                 .apiKey(key)
                 .modelName(qModel)

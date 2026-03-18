@@ -39,6 +39,8 @@ zhipu:
   chatModel: glm-4-flash
   # 图片解析用的视觉模型（glm-4v-flash 不支持 Base64，需用 glm-4v-plus 或 glm-4.6v）
   visionModel: glm-4v-plus
+  # 视觉模型回退顺序：当前模型失败时依次尝试，提升图片 OCR 稳定性
+  visionFallbackModels: glm-4.6v
   # 复盘专用：纯文本分析，用 flash 提速（不要用 glm-4.6v 等多模态慢模型）
   replayModel: glm-4-flash
 

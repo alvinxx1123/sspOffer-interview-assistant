@@ -11,4 +11,8 @@ public interface InterviewChatSessionRepository extends JpaRepository<InterviewC
     Optional<InterviewChatSession> findBySessionId(String sessionId);
 
     List<InterviewChatSession> findAllByOrderByCreatedAtDesc();
+
+    List<InterviewChatSession> findTop20ByEndedAtNotNullOrderByEndedAtDesc();
+
+    List<InterviewChatSession> findTop20ByCompanyAndDepartmentAndEndedAtNotNullOrderByEndedAtDesc(String company, String department);
 }
