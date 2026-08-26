@@ -1,0 +1,19 @@
+{
+  "name": "sspoffer",
+  "version": "1.0.0",
+  "description": "sspOffer 面经助手 - 互联网面试准备平台启动器 (npm install -g sspoffer)",
+  "license": "MIT",
+  "author": "alvinxx1123",
+  "homepage": "https://github.com/alvinxx1123/sspOffer-interview-assistant",
+  "repository": "github:alvinxx1123/sspOffer-interview-assistant",
+  "bugs": "https://github.com/alvinxx1123/sspOffer-interview-assistant/issues",
+  "engines": { "node": ">=16" },
+  "bin": { "sspoffer": "./bin/sspoffer.js" },
+  "scripts": { "postinstall": "node scripts/postinstall.js" },
+  "files": ["bin", "scripts", "README.md"],
+  "sspoffer": {
+    "repo": "alvinxx1123/sspOffer-interview-assistant",
+    "jarAsset": "sspoffer.jar",
+    "minJava": 17
+  }
+}

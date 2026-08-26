@@ -2,7 +2,6 @@ package com.interview.assistant.config;
 
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -45,15 +44,16 @@ public class AppConfig implements WebMvcConfigurer {
                 .allowedHeaders("*");
     }
 
-    /** 智谱 API Key 已配置时使用智谱 Embedding，否则使用本地 AllMiniLM */
+    /**
+     * 智谱 API Key 已配置时使用智谱 Embedding;否则直接抛错,不再 fallback 到本地 AllMiniLM。
+     *
+     * <p>原因:langchain4j 0.36.0 传递依赖的 ai.djl.huggingface:tokenizers 在 0.30~0.36 全系
+     * 没有 macOS x86_64 native dylib,本地 fallback 在 macOS Intel 上必崩。强制走智谱远程
+     * 即可彻底脱离 native 依赖,Windows / Linux / macOS(Intel 与 Apple Silicon)都能启动。
+     */
     @Bean
-    public EmbeddingModel embeddingModel(@Value("${zhipu.apiKey:}") String zhipuApiKey,
-                                        WebClient.Builder webClientBuilder) {
-        String key = (zhipuApiKey != null && !zhipuApiKey.isBlank()) ? zhipuApiKey : System.getenv("ZHIPU_API_KEY");
-        if (key != null && !key.isBlank()) {
-            return new ZhipuEmbeddingModel(key, "", "embedding-2", webClientBuilder);
-        }
-        return new AllMiniLmL6V2EmbeddingModel();
+    public EmbeddingModel embeddingModel(ModelConfigHolder holder, WebClient.Builder webClientBuilder) {
+        return new ZhipuEmbeddingModel(holder, webClientBuilder);
     }
 
     @Bean

@@ -1,0 +1,15 @@
+.settings h1 { margin-bottom: 8px; }
+.settings .page-desc { color: var(--text-secondary); font-size: 14px; margin-bottom: 24px; }
+.settings-error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.4); color: var(--destructive); padding: 10px 16px; border-radius: var(--radius-md); margin-bottom: 16px; font-size: 14px; }
+.settings-msg { background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.4); color: var(--success); padding: 10px 16px; border-radius: var(--radius-md); margin-bottom: 16px; font-size: 14px; }
+.status-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; font-size: 14px; }
+.tag { padding: 2px 10px; border-radius: var(--radius-md); font-size: 12px; color: #fff; }
+.tag.ok { background: var(--success); }
+.tag.bad { background: var(--destructive); }
+.muted { color: var(--text-secondary); font-size: 12px; }
+.form-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.form-group { flex: 1; min-width: 200px; }
+.form-group label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+.form-group input { width: 100%; padding: 8px 12px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); font-size: 14px; }
+.hint { font-size: 12px; color: var(--text-secondary); margin-top: 10px; }
+.action-row { display: flex; gap: 12px; margin-top: 8px; }

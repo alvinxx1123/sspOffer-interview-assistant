@@ -107,3 +107,59 @@ label {
   font-size: 13px;
   color: var(--text-secondary);
 }
+
+/* 滚动条样式：适配深色/浅色主题 */
+textarea,
+.exp-detail-modal,
+.results,
+.chat-messages,
+.interview-search,
+.code-editor-wrap,
+.preview-pane {
+  scrollbar-color: var(--bg-tertiary) var(--bg-secondary);
+  scrollbar-width: thin;
+}
+
+textarea::-webkit-scrollbar,
+.exp-detail-modal::-webkit-scrollbar,
+.results::-webkit-scrollbar,
+.chat-messages::-webkit-scrollbar,
+.interview-search::-webkit-scrollbar,
+.code-editor-wrap::-webkit-scrollbar,
+.preview-pane::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+textarea::-webkit-scrollbar-track,
+.exp-detail-modal::-webkit-scrollbar-track,
+.results::-webkit-scrollbar-track,
+.chat-messages::-webkit-scrollbar-track,
+.interview-search::-webkit-scrollbar-track,
+.code-editor-wrap::-webkit-scrollbar-track,
+.preview-pane::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+textarea::-webkit-scrollbar-thumb,
+.exp-detail-modal::-webkit-scrollbar-thumb,
+.results::-webkit-scrollbar-thumb,
+.chat-messages::-webkit-scrollbar-thumb,
+.interview-search::-webkit-scrollbar-thumb,
+.code-editor-wrap::-webkit-scrollbar-thumb,
+.preview-pane::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border: 2px solid var(--bg-secondary);
+  border-radius: 4px;
+}
+
+textarea::-webkit-scrollbar-thumb:hover,
+.exp-detail-modal::-webkit-scrollbar-thumb:hover,
+.results::-webkit-scrollbar-thumb:hover,
+.chat-messages::-webkit-scrollbar-thumb:hover,
+.interview-search::-webkit-scrollbar-thumb:hover,
+.code-editor-wrap::-webkit-scrollbar-thumb:hover,
+.preview-pane::-webkit-scrollbar-thumb:hover {
+  background: var(--border);
+}

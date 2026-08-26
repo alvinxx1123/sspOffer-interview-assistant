@@ -5,10 +5,12 @@ import './Nav.css'
 const navItems = [
   { path: '/', label: '首页' },
   { path: '/resumes', label: '简历+投递' },
+  { path: '/mastery', label: '实习经历' },
   { path: '/interviews', label: '面经搜索' },
   { path: '/ai-interview', label: 'AI 面试模拟' },
   { path: '/replay', label: '面试复盘' },
   { path: '/ide', label: '在线 IDE' },
+  { path: '/settings', label: '设置' },
 ]
 
 export default function Nav() {

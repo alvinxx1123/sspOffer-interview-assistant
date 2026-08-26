@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useSearchParams } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
+import { useVoiceInput } from '../hooks/useVoiceInput'
 import { api } from '../api/client'
 import './AIInterview.css'
 
@@ -17,12 +22,164 @@ function parseJsonLike(value) {
   }
 }
 
+/** 从 LLM 返回文本中提取面试问题数组(兼容 ```json 包裹与不完整流式文本) */
+function parseQuestions(text) {
+  if (!text) return null
+  let s = String(text).trim()
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fence) s = fence[1].trim()
+  try {
+    const arr = JSON.parse(s)
+    return Array.isArray(arr) ? arr : null
+  } catch {
+    const first = s.indexOf('[')
+    const last = s.lastIndexOf(']')
+    if (first >= 0 && last > first) {
+      try {
+        const arr = JSON.parse(s.slice(first, last + 1))
+        return Array.isArray(arr) ? arr : null
+      } catch {}
+    }
+    return null
+  }
+}
+
+/** 题单渲染:能解析为 JSON 数组时展示卡片,流式中或解析失败时回退原始文本(打字机效果) */
+function QuestionsView({ text, parsed: parsedProp }) {
+  // 优先使用后端流式推过来的结构化题目（避免 JSON 打字机）
+  const parsed = parsedProp && parsedProp.length > 0 ? parsedProp : parseQuestions(text)
+  if (parsed && parsed.length > 0) {
+    return (
+      <ol className="question-cards">
+        {parsed.map((q, i) => (
+          <li key={i} className="question-card">
+            <div className="question-card-head">
+              <span className="question-card-index">Q{i + 1}</span>
+              {q.category && <span className="question-card-badge">{q.category}</span>}
+            </div>
+            <div className="question-card-q">{q.question}</div>
+            {q.intent && (
+              <QuestionIntent intent={q.intent} />
+            )}
+          </li>
+        ))}
+      </ol>
+    )
+  }
+  return <pre className="questions-text">{text}</pre>
+}
+
 function formatPlainText(value) {
   return String(value || '')
     .replace(/\*\*/g, '')
     .replace(/\*/g, '')
     .replace(/^\s*[-•]\s*/gm, '1. ')
     .trim()
+}
+
+/** 把字符串末尾第一个完整顶层 JSON 对象抓出来（容错于 ```json 围栏、混杂前后噪声） */
+function extractFirstJsonObject(text) {
+  if (!text) return null
+  let s = text
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fence) s = fence[1].trim()
+  const first = s.indexOf('{')
+  if (first < 0) return null
+  let depth = 0, inStr = false, esc = false
+  for (let i = first; i < s.length; i++) {
+    const c = s[i]
+    if (esc) { esc = false; continue }
+    if (c === '\\') { esc = true; continue }
+    if (c === '"') { inStr = !inStr; continue }
+    if (inStr) continue
+    if (c === '{') depth++
+    else if (c === '}') { depth--; if (depth === 0) return s.slice(first, i + 1) }
+  }
+  return null
+}
+
+/** 从累积缓冲里把已闭合的顶层 JSON 对象逐条切出来 */
+function extractCompletedJsonItems(buffer) {
+  const items = []
+  let s = buffer
+  // 跳过开头的 ```json 围栏等
+  s = s.replace(/^\s*```json\s*/i, '').replace(/```\s*$/g, '')
+  while (true) {
+    const first = s.indexOf('{')
+    if (first < 0) break
+    let depth = 0, inStr = false, esc = false, end = -1
+    for (let i = first; i < s.length; i++) {
+      const c = s[i]
+      if (esc) { esc = false; continue }
+      if (c === '\\') { esc = true; continue }
+      if (c === '"') { inStr = !inStr; continue }
+      if (inStr) continue
+      if (c === '{') depth++
+      else if (c === '}') { depth--; if (depth === 0) { end = i; break } }
+    }
+    if (end < 0) break
+    const piece = s.slice(first, end + 1)
+    try { items.push(JSON.parse(piece)) } catch { /* ignore */ }
+    s = s.slice(end + 1)
+  }
+  return items
+}
+
+/** 从文本剥离已闭合 JSON 段（剩余 = 未闭合部分 + 噪声） */
+function stripCompletedJsonItems(buffer) {
+  let s = buffer
+  s = s.replace(/^\s*```json\s*/i, '').replace(/```\s*$/g, '')
+  while (true) {
+    const first = s.indexOf('{')
+    if (first < 0) return s
+    let depth = 0, inStr = false, esc = false, end = -1
+    for (let i = first; i < s.length; i++) {
+      const c = s[i]
+      if (esc) { esc = false; continue }
+      if (c === '\\') { esc = true; continue }
+      if (c === '"') { inStr = !inStr; continue }
+      if (inStr) continue
+      if (c === '{') depth++
+      else if (c === '}') { depth--; if (depth === 0) { end = i; break } }
+    }
+    if (end < 0) return s
+    s = s.slice(end + 1)
+  }
+}
+
+/** 整段解析题单列表（多种包壳容错） */
+function parseQuestionList(text) {
+  const cleaned = (text || '').replace(/```json\s*/gi, '').replace(/```/g, '').trim()
+  try {
+    const j = JSON.parse(cleaned)
+    if (Array.isArray(j)) return j
+    if (Array.isArray(j?.questions)) return j.questions
+  } catch {}
+  // 容错：行式 JSON（每行一条）
+  const lines = cleaned.split(/\n+/).map(l => l.trim()).filter(Boolean)
+  const arr = []
+  for (const l of lines) {
+    if (!l.startsWith('{')) continue
+    const obj = extractFirstJsonObject(l)
+    if (obj) { try { arr.push(JSON.parse(obj)) } catch {} }
+  }
+  return arr
+}
+
+/** 把后端 5xx 错误翻译成「用户能改的」建议；优先看后端给的 error 段，其次看 fetch 错误 */
+function friendlyCoachError(err, actionLabel) {
+  const raw = err?.message || ''
+  // 后端通常把根因放 message 里
+  if (raw.includes('Tools are currently not supported')) {
+    return `当前 LLM（${raw.match(/model[^"]*"([^"]+)"/)?.[1] || ''}）不支持工具调用，请到设置页切换为 deepseek-chat 后再试`
+  }
+  if (raw.toLowerCase().includes('timeout') || raw.includes('timeout')) {
+    return `LLM 响应超时。可在设置页换更小/更快的模型，或稍后重试`
+  }
+  if (raw.includes('api_key') || raw.includes('API Key') || raw.includes('未配置')) {
+    return `LLM/视觉 API Key 未配置。请到设置页填写后重试`
+  }
+  return `${actionLabel}失败：${raw || '请检查后端日志'}`
 }
 
 function normalizeThinkingStep(step) {
@@ -138,6 +295,39 @@ function ScoreBlock({ data, title = '评分', showComparison = false }) {
 }
 
 /** 助手回复 → 简化为「Markdown + 纯 URL」渲染，前端不再尝试修 HTML，只负责把 [标题](URL) / 裸 URL 变成 <a>。 */
+const markdownComponents = {
+  a: ({ node, ...props }) => <a target="_blank" rel="noopener noreferrer" {...props} />
+}
+
+function normalizeMarkdown(content) {
+  let s = String(content)
+  // 模型/链路返回的内容可能没有换行，给标题/分隔线/列表项前补换行，避免挤在一行
+  s = s.replace(/ ?(#{1,6}\s)/g, '\n$1')
+  s = s.replace(/ ?--- ?/g, '\n---\n')
+  s = s.replace(/(?:^| )([-*]\s)/g, '\n$1')
+  s = s.replace(/\n{3,}/g, '\n\n').trim()
+  return s
+}
+
+function MarkdownSections({ content }) {
+  if (!content) return null
+  const text = normalizeMarkdown(content)
+  // 按 ### 小节切分；不以 ### 开头的引言段直接平铺
+  const parts = text.split(/\n(?=###\s)/)
+  return parts.map((part, i) => {
+    const t = part.trim()
+    if (!t) return null
+    if (/^###\s/.test(t)) {
+      return (
+        <div key={i} className="assistant-card">
+          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={markdownComponents}>{t}</ReactMarkdown>
+        </div>
+      )
+    }
+    return <ReactMarkdown key={i} remarkPlugins={[remarkGfm, remarkBreaks]} components={markdownComponents}>{t}</ReactMarkdown>
+  })
+}
+
 function formatAssistantContent(content) {
   if (!content) return ''
   let s = String(content)
@@ -192,6 +382,22 @@ function formatAssistantContent(content) {
 
 export default function AIInterview() {
   const [companies, setCompanies] = useState([])
+  const [searchParams] = useSearchParams()
+
+  // 从 URL 注入简历/公司（由 Mastery「拿去 AI 面试」跳转携带）
+  useEffect(() => {
+    const r = searchParams.get('resume')
+    if (r) setResumeContent(decodeURIComponent(r))
+    const c = searchParams.get('company')
+    if (c) setCompany(decodeURIComponent(c))
+    const d = searchParams.get('department')
+    if (d) setDepartment(decodeURIComponent(d))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  // 面试对话语音输入
+  const voice = useVoiceInput({ onText: (chunk) => setChatInput(prev => prev + chunk) })
+
   const [departments, setDepartments] = useState([])
   const [company, setCompany] = useState('')
   const [department, setDepartment] = useState('')
@@ -214,13 +420,21 @@ export default function AIInterview() {
   const [coachFollowups, setCoachFollowups] = useState('')
   const [coachEval, setCoachEval] = useState(null)
   const [coachLoading, setCoachLoading] = useState(false)
+  // 给「为什么按钮按下去没让我看到结果」的轻量 toast
+  const [coachHint, setCoachHint] = useState('')
 
   const [loading, setLoading] = useState(false)
   const [thinkingSteps, setThinkingSteps] = useState([])
+  // 题单按 JSON 结构化的状态（一次呈现，避免 JSON 打字机）
+  const [parsedQuestions, setParsedQuestions] = useState([])
   const [parsingResume, setParsingResume] = useState(false)
   const [resumeMsg, setResumeMsg] = useState('')
   const chatEndRef = useRef(null)
-  // 智能助手（Function Calling）：可查面经、题库、运行代码
+  // chat 容器 ref（用于判断用户是否在「底部」以决定是否自动滚动）
+  const chatScrollRef = useRef(null)
+  const chatStickyBottomRef = useRef(true)
+  const [showJumpToBottom, setShowJumpToBottom] = useState(false)
+  // 智能助手：可查面经、题库、运行代码
   const [toolsInput, setToolsInput] = useState('')
   const [toolsMessages, setToolsMessages] = useState([])
   const [toolsLoading, setToolsLoading] = useState(false)
@@ -250,6 +464,18 @@ export default function AIInterview() {
     const nextSessionId = generateSessionId()
     setSessionId(nextSessionId)
     try {
+      // JSON 累积器：把后端流过来的逐 token 放进缓冲，
+      // 一旦缓冲里有闭合的 ```json...``` 块或 {...} 顶层对象，
+      // 就把它换成漂亮的题目卡片呈现；中途只显示「打字中」状态
+      let buffer = ''
+      const commitParsedFromBuffer = () => {
+        const items = extractCompletedJsonItems(buffer)
+        for (const it of items) {
+          // 解析成功的 JSON 题目 → 渲染为独立卡片（替换之前的 json 行）
+        }
+        const cleaned = stripCompletedJsonItems(buffer)
+        if (cleaned !== buffer) buffer = cleaned
+      }
       await api.generateQuestionsStream(
         company || '',
         department || '',
@@ -262,11 +488,23 @@ export default function AIInterview() {
           },
           onDelta: (chunk) => {
             if (!chunk) return
-            setQuestions((prev) => `${prev}${chunk}`)
+            buffer += chunk
+            // 解析是否出现可完整闭合的 JSON 条目
+            commitParsedFromBuffer()
+            // 暂时仍把原始 buffer 写回（其实一进 result 就会被整段替换）
+            setQuestions(buffer)
+          },
+          onQuestion: (q) => {
+            // 后端每解析出一题就实时推一条，append 到 parsedQuestions
+            setParsedQuestions((prev) => [...prev, q])
           },
           onResult: (text) => {
-            const nextQuestions = text || ''
-            setQuestions(nextQuestions)
+            // 后端发的最终整段，习惯上还是把多余 code fence 剥掉
+            const cleanedText = (text || '').replace(/```json\s*|```/g, '').trim()
+            // 优先按 JSON 数组解析；解析失败时退回原文
+            const parsedList = parseQuestionList(cleanedText)
+            setQuestions(parsedList ? '' : cleanedText)
+            setParsedQuestions(parsedList || [])
             setChatMessages([])
           },
           onError: (msg) => {
@@ -311,7 +549,15 @@ export default function AIInterview() {
   const coachDoEvaluate = async () => {
     if (coachLoading) return
     const { question, answer } = getLastQnA()
-    if (!question.trim() || !answer.trim()) return
+    if (!question.trim()) {
+      setCoachHint('请先答完一题后查看点评')
+      return
+    }
+    if (!answer.trim()) {
+      setCoachHint('你还没回答当前问题，请先把答案输入到下方对话框')
+      return
+    }
+    setCoachHint('')
     setCoachLoading(true)
     setCoachEval(null)
     try {
@@ -319,7 +565,7 @@ export default function AIInterview() {
       setCoachEval(parseJsonLike(res) || res || null)
     } catch (e) {
       console.error(e)
-      setCoachEval({ error: e?.message || '评分失败' })
+      setCoachEval({ error: friendlyCoachError(e, '当前回答点评') })
     } finally {
       setCoachLoading(false)
     }
@@ -328,7 +574,15 @@ export default function AIInterview() {
   const coachDoFollowups = async () => {
     if (coachLoading) return
     const { question, answer } = getLastQnA()
-    if (!question.trim() || !answer.trim()) return
+    if (!question.trim()) {
+      setCoachHint('请先答完一题后查看可继续深挖点')
+      return
+    }
+    if (!answer.trim()) {
+      setCoachHint('你还没回答当前问题，请先把答案输入到下方对话框')
+      return
+    }
+    setCoachHint('')
     setCoachLoading(true)
     setCoachFollowups('')
     try {
@@ -336,7 +590,7 @@ export default function AIInterview() {
       setCoachFollowups(formatPlainText(res?.followups || ''))
     } catch (e) {
       console.error(e)
-      setCoachFollowups('生成追问失败: ' + (e?.message || ''))
+      setCoachFollowups('生成追问失败: ' + friendlyCoachError(e, '可继续深挖点'))
     } finally {
       setCoachLoading(false)
     }
@@ -345,7 +599,11 @@ export default function AIInterview() {
   const coachDoAnswer = async () => {
     if (coachLoading) return
     const { question } = getLastQnA()
-    if (!question.trim()) return
+    if (!question.trim()) {
+      setCoachHint('请先答完一题后查看参考答案')
+      return
+    }
+    setCoachHint('')
     setCoachLoading(true)
     setCoachAnswer('')
     try {
@@ -353,15 +611,31 @@ export default function AIInterview() {
       setCoachAnswer(formatPlainText(res?.answer || ''))
     } catch (e) {
       console.error(e)
-      setCoachAnswer('答疑失败: ' + (e?.message || ''))
+      setCoachAnswer('答疑失败: ' + friendlyCoachError(e, '参考答案'))
     } finally {
       setCoachLoading(false)
     }
   }
 
 
-  useEffect(() => {
+  const onChatScroll = () => {
+    const el = chatScrollRef.current
+    if (!el) return
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    const sticky = distFromBottom < 60
+    chatStickyBottomRef.current = sticky
+    setShowJumpToBottom(!sticky)
+  }
+  const jumpToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    chatStickyBottomRef.current = true
+    setShowJumpToBottom(false)
+  }
+  useEffect(() => {
+    // 仅当用户「贴底」时贴下；用户向上翻时不要打断
+    if (chatStickyBottomRef.current) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [chatMessages])
 
   const loadHistory = () => {
@@ -559,44 +833,55 @@ export default function AIInterview() {
         </div>
         <button className="btn-primary" onClick={generate} disabled={loading}>
           {loading ? '生成中...' : '生成深挖问题'}
-        </button>
-      </div>
+       </button>
+     </div>
 
-      {(loading || thinkingSteps.length > 0) && (
-        <div className="thinking-steps">
-          <h3 className="thinking-title">思考过程</h3>
-          <ul className="thinking-list">
-            {thinkingSteps.map((step, i) => (
-              <li key={i} className="thinking-step">
-                <span className={`thinking-dot ${step.status === 'in_progress' ? 'thinking-dot-pulse' : ''}`} />
-                <div className="thinking-step-body">
-                  <div className="thinking-step-title">{step.title}</div>
-                  {step.detail && <div className="thinking-step-detail">{step.detail}</div>}
-                </div>
-              </li>
-            ))}
-            {loading && thinkingSteps.length === 0 && (
-              <li className="thinking-step">
-                <span className="thinking-dot thinking-dot-pulse" />
-                准备中…
-              </li>
-            )}
-          </ul>
+     {(loading || thinkingSteps.length > 0 || questions) && (
+     <div className="interview-panel">
+
+     {(loading || thinkingSteps.length > 0) && (
+        <div className="panel-section thinking-steps">
+         <h3 className="thinking-title">思考过程</h3>
+         <ul className="thinking-list">
+           {thinkingSteps.map((step, i) => (
+             <li key={i} className="thinking-step">
+               <span className={`thinking-dot ${step.status === 'in_progress' ? 'thinking-dot-pulse' : ''}`} />
+               <div className="thinking-step-body">
+                 <div className="thinking-step-title">{step.title}</div>
+                 {step.detail && <div className="thinking-step-detail">{step.detail}</div>}
+               </div>
+             </li>
+           ))}
+           {loading && thinkingSteps.length === 0 && (
+             <li className="thinking-step">
+               <span className="thinking-dot thinking-dot-pulse" />
+               准备中…
+             </li>
+           )}
+         </ul>
         </div>
       )}
 
       {questions && (
+        <div className="panel-divider" />
+     )}
+
+      {questions && (
         <>
-          <div className="questions-result">
+          <div className="panel-section questions-result">
             <h2>生成的面试问题</h2>
-            {loading && (
-              <div className="questions-streaming-tag">题单流式生成中...</div>
+            {loading && parsedQuestions.length === 0 && (
+              <div className="questions-streaming-tag">题单流式生成中…</div>
             )}
-            <pre className="questions-text">{questions}</pre>
+            {parsedQuestions.length > 0
+              ? <QuestionsView parsed={parsedQuestions} text={questions} />
+              : (questions && <QuestionsView text={questions} />)}
           </div>
 
           {sessionId && (
-            <div className="chat-section">
+            <>
+            <div className="panel-divider" />
+            <div className="panel-section chat-section">
               <div className="chat-header">
                 <h2>与面试官探讨</h2>
                 {!sessionEnded && (
@@ -608,15 +893,15 @@ export default function AIInterview() {
               </div>
               <p className="chat-hint">上面已经一次性生成了整套题单，覆盖实习、项目、Java 八股和 AI/Agent/LLM 等方向。你可以按自己的节奏挑题作答；这里的面试官会基于你的回答继续深挖，不会再重新给整套题目。点击“结束当前会话并评分”后，再生成整场总结与分数。</p>
               <div className="coach-panel">
-                <div className="coach-block">
+                <div className="coach-block coach-block--inline">
                   <div className="coach-title">辅助功能</div>
-                  <div className="coach-text">这些功能不会改变主流程，仅用于你在练习时查看当前回答点评、可继续深挖的问题和参考答案。</div>
-                  <div className="coach-actions">
-                    <button className="btn-secondary btn-sm" onClick={coachDoEvaluate} disabled={coachLoading || chatMessages.length < 2}>当前回答点评</button>
-                    <button className="btn-secondary btn-sm" onClick={coachDoFollowups} disabled={coachLoading || chatMessages.length < 2}>查看可继续深挖点</button>
-                    <button className="btn-secondary btn-sm" onClick={coachDoAnswer} disabled={coachLoading || chatMessages.length < 1}>查看参考答案</button>
-                    {coachLoading && <span className="coach-loading">处理中...</span>}
+                  <div className="coach-hint-row">
+                    <button className="coach-icon-btn" onClick={coachDoEvaluate} disabled={coachLoading} title="对你最近一轮回答做点评">📝 点评</button>
+                    <button className="coach-icon-btn" onClick={coachDoFollowups} disabled={coachLoading} title="基于回答给出 2-4 个更深的问题">🤔 深挖</button>
+                    <button className="coach-icon-btn" onClick={coachDoAnswer} disabled={coachLoading} title="参考要点（不覆盖主对话）">💡 参考</button>
+                    {coachLoading && <span className="coach-loading">处理中…</span>}
                   </div>
+                  {coachHint && <div className="coach-hint-bubble">{coachHint}</div>}
                 </div>
               </div>
               {(sessionReportLoading || sessionReport) && (
@@ -653,20 +938,28 @@ export default function AIInterview() {
                 </div>
               )}
 
-              <div className="chat-messages">
+              <div className="chat-messages" ref={chatScrollRef} onScroll={onChatScroll}>
                 {chatMessages.map((m, i) => (
                   <div key={i} className={`chat-msg ${m.role}`}>
                     <span className="chat-role">{m.role === 'user' ? '你' : '面试官'}</span>
-                    <div className="chat-content markdown-like" dangerouslySetInnerHTML={{ __html: (m.content || '').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>') }} />
+                    <div className="chat-content markdown-like"><MarkdownSections content={m.content || ''} /></div>
                   </div>
                 ))}
                 {chatLoading && (
                   <div className="chat-msg assistant">
                     <span className="chat-role">面试官</span>
-                    <span className="chat-loading">思考中...</span>
+                    <span className="chat-loading">思考中（可能正在调用工具）...</span>
                   </div>
                 )}
                 <div ref={chatEndRef} />
+                {showJumpToBottom && chatMessages.length > 0 && (
+                  <button
+                    type="button"
+                    className="chat-jump-bottom"
+                    onClick={jumpToBottom}
+                    title="跳到底部"
+                  >↓ 到底部</button>
+                )}
               </div>
               {!sessionEnded && (
               <div className="chat-input-row">
@@ -680,10 +973,22 @@ export default function AIInterview() {
                       sendChat()
                     }
                   }}
-                  placeholder="输入你对某一道题的回答，或贴出题号后作答（Enter 发送，Shift+Enter 换行）"
+                  placeholder="输入你的回答（或点 🎤 语音输入，Enter 发送，Shift+Enter 换行）"
                   rows={2}
                   disabled={chatLoading}
                 />
+                {voice.supported && (
+                  <button
+                    type="button"
+                    className={`mic-btn ${voice.listening ? 'recording' : ''}`}
+                    title={voice.listening ? '点击停止语音' : '语音输入'}
+                    onClick={voice.toggle}
+                    disabled={chatLoading}
+                  >{voice.listening ? '⏹️' : '🎤'}</button>
+                )}
+                {voice.listening && voice.interim && (
+                  <span className="interim-text">{voice.interim}</span>
+                )}
                 <button
                   className="btn-primary chat-send"
                   onClick={sendChat}
@@ -692,20 +997,24 @@ export default function AIInterview() {
                   继续面试
                 </button>
               </div>
-              )}
-            </div>
+             )}
+           </div>
+           </>
           )}
-        </>
-      )}
+       </>
+     )}
+
+     </div>
+     )}
 
       <div className="tools-section">
-        <h2>智能助手（Function Calling v2）</h2>
-        <p className="tools-hint">直接提问，助手可自动查面经、查题库、运行代码。例如：「查一下字节后端的面经」「给我一道中等难度的算法题」「运行这段 Java 代码：...」</p>
+        <h2>智能助手（Function Calling）</h2>
+        <p className="tools-hint">面试对话中可直接说「查一下字节后端的面经」「给我一道中等难度的算法题」「跑一下这段代码：…」，面试官会自动调用工具并继续面试。下方为独立助手入口，用于非面试场景快速查面经/题库/跑代码。</p>
         <div className="tools-messages">
           {toolsMessages.map((m, i) => (
             <div key={i} className={`chat-msg ${m.role}`}>
               <span className="chat-role">{m.role === 'user' ? '你' : '助手'}</span>
-              <div className="chat-content markdown-like" style={{ whiteSpace: 'pre-wrap' }} dangerouslySetInnerHTML={{ __html: formatAssistantContent(m.content) }} />
+              <div className="chat-content markdown-like"><MarkdownSections content={m.content || ''} /></div>
             </div>
           ))}
           {toolsLoading && (
@@ -802,7 +1111,7 @@ export default function AIInterview() {
                 {viewingSession && !viewingSession._error && viewingSession.questions && (
                   <div className="session-detail-questions">
                     <h4>本场面试问题</h4>
-                    <pre>{viewingSession.questions}</pre>
+                    <QuestionsView text={viewingSession.questions} />
                   </div>
                 )}
                 {viewingSession && !viewingSession._error && (
@@ -818,7 +1127,7 @@ export default function AIInterview() {
                       (viewingSession.messages || []).map((m, i) => (
                         <div key={i} className={`chat-msg ${m.role}`}>
                           <span className="chat-role">{m.role === 'user' ? '你' : '面试官'}</span>
-                          <div className="chat-content markdown-like" dangerouslySetInnerHTML={{ __html: (m.content || '').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>') }} />
+                          <div className="chat-content markdown-like"><MarkdownSections content={m.content || ''} /></div>
                         </div>
                       ))
                     ) : (

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 在阿里云 ECS 上运行此脚本：安装 systemd 服务，开机自启，无需手动启动 Spring Boot
+# 在 Linux 服务器（裸机 / VPS / Docker 主机）上运行此脚本：安装 systemd 服务，开机自启，无需手动启动 Spring Boot
 # 用法：
 #   1. 先把 jar 上传到 /opt/，再上传本脚本到 /opt/
 #   2. ssh 登录服务器后： chmod +x /opt/setup-ecs.sh && /opt/setup-ecs.sh
@@ -14,7 +14,7 @@ UNIT_FILE="/etc/systemd/system/${SVC_NAME}.service"
 echo "==> 使用 JAR: $JAR_PATH"
 if [ ! -f "$JAR_PATH" ]; then
   echo "错误: 未找到 $JAR_PATH"
-  echo "请先将 jar 上传到 /opt/，例如： scp target/interview-assistant-1.0.0.jar root@公网IP:/opt/"
+  echo "请先将 jar 上传到 /opt/，例如： scp target/interview-assistant-1.0.0.jar user@your-server-ip:/opt/"
   exit 1
 fi
 
@@ -32,8 +32,11 @@ echo "==> 已检测到: $JAVA_VER"
 if [ ! -f "$ENV_FILE" ]; then
   echo "==> 创建环境变量模板: $ENV_FILE"
   cat > "$ENV_FILE" << 'EOF'
-# 智谱 API Key（必填，否则 AI 功能不可用）
+# DeepSeek API Key（必填，大模型对话/出题/复盘/视觉 OCR）
+DEEPSEEK_API_KEY=你的DeepSeekAPI_Key
+# 智谱 API Key（推荐配：RAG 向量检索；不配也能启动，RAG 降级为关键词）
 ZHIPU_API_KEY=你的智谱API_Key
+EMBEDDING_API_KEY=同上（推荐用 EMBEDDING_API_KEY，兼容新模型配置）
 # 管理员密码（可选，不设则不校验）
 APP_ADMIN_PASSWORD=你的管理员密码
 EOF
@@ -73,7 +76,7 @@ echo "  查看状态: systemctl status $SVC_NAME"
 echo "  查看日志: journalctl -u $SVC_NAME -f"
 echo "  重启服务: systemctl restart $SVC_NAME"
 echo ""
-echo "请确保安全组已开放 TCP 8080，然后访问: http://你的公网IP:8080"
+echo "请确保防火墙已开放 TCP 8080，然后访问: http://your-server-ip:8080"
 echo "若已配置 Nginx 反向代理，可访问: http://你的域名"
 echo ""
 

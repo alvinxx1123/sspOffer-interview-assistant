@@ -137,7 +137,8 @@ public class InterviewAgentService {
 
     public record QuestionStreamCallbacks(
             java.util.function.Consumer<QuestionGenerationStep> onStep,
-            java.util.function.Consumer<String> onDelta
+            java.util.function.Consumer<String> onDelta,
+            java.util.function.Consumer<java.util.Map<String, Object>> onParsedQuestion
     ) {}
 
     /** 带步骤回调的深挖问题生成，用于 SSE 流式展示「链式思考」过程 */
@@ -150,6 +151,7 @@ public class InterviewAgentService {
                                 stepCallback.accept(step.title() + "：" + step.detail());
                             }
                         },
+                        null,
                         null
                 ));
     }
@@ -186,6 +188,9 @@ public class InterviewAgentService {
 
         emitStep(callbacks, "generation", "in_progress", "流式生成题单", "题单正在生成中，下面会逐段展示最新内容。");
         StringBuilder result = new StringBuilder();
+        final StringBuilder parseBuf = new StringBuilder();
+        final java.util.concurrent.atomic.AtomicReference<Integer> nextStart = new java.util.concurrent.atomic.AtomicReference<>(0);
+        // (lambda removed — see private extractNextParsedQuestion method below)
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<Throwable> errorRef = new AtomicReference<>();
 
@@ -197,6 +202,8 @@ public class InterviewAgentService {
                 if (callbacks != null && callbacks.onDelta() != null) {
                     callbacks.onDelta().accept(token);
                 }
+                parseBuf.append(token);
+                extractAndEmitQuestions(parseBuf.toString(), callbacks);
             }
 
             @Override
@@ -252,6 +259,56 @@ public class InterviewAgentService {
                 ? "已命中相关面经片段，将结合真实题型和简历经历生成问题。"
                 : "暂未命中强相关面经，将回退到通用高频考点并结合简历技术栈补足题目。";
         emitStep(callbacks, "retrieval", hasReference ? "completed" : "fallback", title, detail);
+    }
+
+
+    /** 从 LLM 流式累积文本里切出已闭合的顶层 JSON 对象，每条 emit 到 onParsedQuestion。
+     *  修复：之前遇到未闭合的 ``` 围栏就 early-return，导致前端只能拿到 delta 原始 token、看不到逐题卡片。
+     *  新逻辑：即使围栏未闭合，也继续在 fence 内部尽力切已闭合的 {...} 对象，残留部分等到下一次 onNext 续切。 */
+    private void extractAndEmitQuestions(String full, QuestionStreamCallbacks callbacks) {
+        if (full == null || full.isEmpty() || callbacks == null || callbacks.onParsedQuestion() == null) return;
+        int start = 0;
+        final int max = full.length();
+        while (start < max) {
+            // 跳过 markdown 围栏的开头 ```；闭合 ``` 可能还没出现，这里不能直接 return
+            if (full.regionMatches(start, "```", 0, 3)) {
+                int closeEnd = full.indexOf("```", start + 3);
+                if (closeEnd >= 0) {
+                    // 已闭合：跳到围栏结束后继续
+                    start = closeEnd + 3;
+                } else {
+                    // 未闭合（流式中）：跳到 ``` 开头之后，仍然从那里继续尝试切对象
+                    start = start + 3;
+                }
+                while (start < max && Character.isWhitespace(full.charAt(start))) start++;
+                continue;
+            }
+            int first = full.indexOf('{', start);
+            if (first < 0) return;
+            int depth = 0;
+            boolean inStr = false;
+            boolean esc = false;
+            int end = -1;
+            for (int i = first; i < max; i++) {
+                char ch = full.charAt(i);
+                if (esc) { esc = false; continue; }
+                if (ch == '\\') { esc = true; continue; }
+                if (ch == '"') { inStr = !inStr; continue; }
+                if (inStr) continue;
+                if (ch == '{') depth++;
+                else if (ch == '}') { depth--; if (depth == 0) { end = i; break; } }
+            }
+            if (end < 0) return; // 对象还未闭合，等下一次 onNext
+            String piece = full.substring(first, end + 1);
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper m = new com.fasterxml.jackson.databind.ObjectMapper();
+                java.util.Map<String, Object> q = m.readValue(piece, java.util.Map.class);
+                if (q != null) callbacks.onParsedQuestion().accept(q);
+            } catch (Exception ignore) {}
+            start = end + 1;
+            // 跳掉对象之间的逗号/空白，便于下一轮直接定位到下一个 {
+            while (start < max && (Character.isWhitespace(full.charAt(start)) || full.charAt(start) == ',')) start++;
+        }
     }
 
     private void emitStep(QuestionStreamCallbacks callbacks, String stage, String status, String title, String detail) {

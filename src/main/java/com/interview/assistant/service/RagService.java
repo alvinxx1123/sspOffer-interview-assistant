@@ -1,6 +1,7 @@
 package com.interview.assistant.service;
 
 import com.interview.assistant.config.InterviewEmbeddingStore;
+import com.interview.assistant.config.ModelConfigHolder;
 import com.interview.assistant.entity.InterviewExperience;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
@@ -28,6 +29,8 @@ public class RagService {
     private static final Logger log = LoggerFactory.getLogger(RagService.class);
     private static final int MAX_CHARS_PER_CHUNK = 800;
     private static final int MAX_CHUNKS_PER_EXPERIENCE = 2;
+    /** 批量索引节流:每条面经之间的间隔(ms),规避智谱 embedding 紧 QPS 限流。 */
+    private static final long THROTTLE_MILLIS_BETWEEN_EXPERIENCES = 500L;
     private static final String TYPE_OVERVIEW = "总述";
     private static final String TYPE_INTERNSHIP = "实习";
     private static final String TYPE_PROJECT = "项目";
@@ -37,10 +40,19 @@ public class RagService {
 
     private final EmbeddingModel embeddingModel;
     private final EmbeddingStore<TextSegment> embeddingStore;
+    private final ModelConfigHolder holder;
 
-    public RagService(EmbeddingModel embeddingModel, EmbeddingStore<TextSegment> embeddingStore) {
+    public RagService(EmbeddingModel embeddingModel,
+                      EmbeddingStore<TextSegment> embeddingStore,
+                      ModelConfigHolder holder) {
         this.embeddingModel = embeddingModel;
         this.embeddingStore = embeddingStore;
+        this.holder = holder;
+    }
+
+    /** RAG 是否可用：Embedding API Key 已配置且当前非空 */
+    public boolean isEmbeddingAvailable() {
+        return holder != null && holder.isEmbeddingConfigured();
     }
 
     @PostConstruct
@@ -49,8 +61,18 @@ public class RagService {
     }
 
     public void indexExperiences(List<InterviewExperience> experiences) {
-        for (InterviewExperience exp : experiences) {
-            indexExperience(exp);
+        for (int i = 0; i < experiences.size(); i++) {
+            indexExperience(experiences.get(i));
+            // 节流:每条面经批量 embedding 后间隔,规避智谱 embedding-2 紧 QPS(免费包通常 2~5 QPS)限流。
+            // 已有 doRequest 内的指数退避兜底,这里再加一层稳态节流,降低触发 429 的概率。
+            if (i < experiences.size() - 1) {
+                try {
+                    Thread.sleep(THROTTLE_MILLIS_BETWEEN_EXPERIENCES);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
         }
     }
 
@@ -72,10 +94,20 @@ public class RagService {
     }
 
     public void indexExperience(InterviewExperience exp) {
+        // 软启动：未配置 Embedding API Key 时跳过索引（不抛错），让"非 RAG"功能仍可用
+        if (!isEmbeddingAvailable()) {
+            log.warn("RAG: Embedding API Key 未配置，跳过面经索引（仅关键词搜索可用，RAG 向量检索不可用）。" +
+                    "请在「设置」页或环境变量 EMBEDDING_API_KEY / ZHIPU_API_KEY 中配置。");
+            return;
+        }
+
         if (exp.getId() != null && embeddingStore instanceof InterviewEmbeddingStore) {
             ((InterviewEmbeddingStore) embeddingStore).removeByExperienceId(exp.getId());
         }
         List<ChunkMeta> chunks = buildChunks(exp);
+
+        // 收集有效 chunk(跳过空文本 + 截断超长),构建对应的 TextSegment(带 metadata)
+        List<TextSegment> segments = new ArrayList<>();
         for (ChunkMeta c : chunks) {
             String text = c.text;
             if (text == null || text.isBlank()) continue;
@@ -88,9 +120,26 @@ public class RagService {
             if (exp.getDepartment() != null) metaMap.put("department", exp.getDepartment());
             metaMap.put("position", exp.getPosition() != null ? exp.getPosition() : "");
             metaMap.put("type", c.type);
-            TextSegment segment = TextSegment.from(text, Metadata.from(metaMap));
-            Embedding embedding = embeddingModel.embed(text).content();
-            embeddingStore.add(embedding, segment);
+            segments.add(TextSegment.from(text, Metadata.from(metaMap)));
+        }
+        if (segments.isEmpty()) return;
+
+        // 批量 embedding(一次 HTTP 调用替代 N 次,大幅降低 429 限流概率)
+        List<Embedding> embeddings;
+        try {
+            embeddings = embeddingModel.embedAll(segments).content();
+        } catch (Exception batchEx) {
+            // 兜底:批量失败(如智谱单次输入超限/网络抖动)时,降级为逐条 embed,尽量不丢面经块
+            log.warn("批量 embedding 失败，降级为逐条 embed: {}", batchEx.getMessage());
+            embeddings = new ArrayList<>();
+            for (TextSegment seg : segments) {
+                embeddings.add(embeddingModel.embed(seg.text()).content());
+            }
+        }
+
+        // 批量写库;若返回数量与输入不一致(异常情况),按可用数量写入,避免越界
+        for (int i = 0; i < embeddings.size() && i < segments.size(); i++) {
+            embeddingStore.add(embeddings.get(i), segments.get(i));
         }
     }
 
@@ -98,10 +147,15 @@ public class RagService {
     public List<String> search(String query, String company, String department, int maxResults) {
         java.util.List<String> tokens = tokenize(query);
 
-        // 1) 向量召回（语义）
-        Embedding queryEmbedding = embeddingModel.embed(query).content();
-        int fetch = Math.max(maxResults * 3, 20);
-        java.util.List<EmbeddingMatch<TextSegment>> vecMatches = embeddingStore.findRelevant(queryEmbedding, fetch, 0.4);
+        // 1) 向量召回（语义）—— 未配置 Embedding API Key 时跳过，降级为纯关键词召回
+        java.util.List<EmbeddingMatch<TextSegment>> vecMatches = java.util.List.of();
+        if (isEmbeddingAvailable()) {
+            Embedding queryEmbedding = embeddingModel.embed(query).content();
+            int fetch = Math.max(maxResults * 3, 20);
+            vecMatches = embeddingStore.findRelevant(queryEmbedding, fetch, 0.4);
+        } else {
+            log.debug("RAG: Embedding 未配置，本次 search 走纯关键词召回（query='{}'）", query);
+        }
 
         // 2) 关键词召回（补召回，避免纯向量漏掉关键术语）
         java.util.List<TextSegment> all;
@@ -173,8 +227,14 @@ public class RagService {
      */
     public Map<String, String> searchStructuredForDeepQuestions(String query, String company, String department) {
         java.util.List<String> tokens = tokenize(query);
-        Embedding queryEmbedding = embeddingModel.embed(query).content();
-        java.util.List<EmbeddingMatch<TextSegment>> vecMatches = embeddingStore.findRelevant(queryEmbedding, 25, 0.4);
+        // 软启动：未配置 Embedding API Key 时跳过向量召回
+        java.util.List<EmbeddingMatch<TextSegment>> vecMatches = java.util.List.of();
+        if (isEmbeddingAvailable()) {
+            Embedding queryEmbedding = embeddingModel.embed(query).content();
+            vecMatches = embeddingStore.findRelevant(queryEmbedding, 25, 0.4);
+        } else {
+            log.debug("RAG: Embedding 未配置，本次 searchStructuredForDeepQuestions 走纯关键词召回（query='{}'）", query);
+        }
 
         java.util.List<TextSegment> all;
         if (embeddingStore instanceof InterviewEmbeddingStore) {

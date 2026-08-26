@@ -7,6 +7,7 @@ import com.interview.assistant.service.InterviewAgentWithToolsService;
 import com.interview.assistant.service.InterviewChatService;
 import com.interview.assistant.service.ImageParseService;
 import com.interview.assistant.service.InterviewCoachingService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,6 +33,7 @@ public class InterviewController {
     private static final Logger log = LoggerFactory.getLogger(InterviewController.class);
     private final InterviewDataService interviewDataService;
     private final InterviewAgentService agentService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private final InterviewAgentWithToolsService agentWithToolsService;
     private final InterviewChatService interviewChatService;
     private final ImageParseService imageParseService;
@@ -120,6 +122,14 @@ public class InterviewController {
                                         emitter.send(SseEmitter.event().name("delta").data(delta != null ? delta : ""));
                                     } catch (IOException e) {
                                         log.warn("SSE send delta failed", e);
+                                    }
+                                },
+                                parsedQuestion -> {
+                                    try {
+                                        String qj = objectMapper.writeValueAsString(parsedQuestion);
+                                        emitter.send(SseEmitter.event().name("question").data(qj));
+                                    } catch (Exception e) {
+                                        log.warn("SSE send question failed", e);
                                     }
                                 }
                         )

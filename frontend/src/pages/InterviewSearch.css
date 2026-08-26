@@ -439,6 +439,40 @@
   border-left: 3px solid var(--accent);
 }
 
+/* 【xxx】分块标题：纯分块行 */
+.bagu-q-category {
+  margin: 14px 0 6px;
+  padding: 6px 0 6px 10px;
+  border-left: 3px solid var(--accent);
+  background: linear-gradient(90deg, rgba(99,102,241,0.10), transparent);
+  border-radius: 4px;
+}
+.bagu-q-category:first-child { margin-top: 0; }
+.bagu-q-cat-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+}
+/* 题目内联【xxx】分类前缀（如「【数据库】数据库事务是什么…」整行存在时） */
+.bagu-q-cat-inline {
+  font-weight: 600;
+  color: var(--accent);
+  margin-right: 6px;
+  font-size: 12.5px;
+}
+.exp-detail-tag.algo .bagu-q-cat-inline,
+.exp-detail-tag.llm .bagu-q-cat-inline {
+  color: inherit;
+  font-weight: 600;
+}
+/* 编辑表单中的分类占位行：弱化样式，让用户知道这不是普通题目 */
+.bagu-qa-item-category {
+  background: rgba(99,102,241,0.06);
+  border: 1px dashed rgba(99,102,241,0.45);
+}
+.bagu-qa-item-category .bagu-qa-a { display: none; }
+
 .bagu-q {
   font-weight: 500;
   margin-bottom: 6px;

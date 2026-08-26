@@ -190,11 +190,14 @@ public class InterviewAgentWithToolsService {
 
     /**
      * 仅生成纯净 http 字符串。❌ 禁止在 URL 中加 &lt;a href=、target=、rel= 等 HTML。
-     * 格式：http://8.138.47.162:8080/ide?questionId= + questionId
+     * 格式：<app.base-url>/ide?questionId= + questionId
+     * 当 app.base-url 未配置时返回 ""，由前端在运行时拼接当前 host 即可
      */
     private String buildLocalIdeUrl(long questionId) {
-        String base = (appBaseUrl == null || appBaseUrl.isBlank()) ? "http://8.138.47.162:8080" : appBaseUrl.replaceAll("/$", "");
-        return base + "/ide?questionId=" + questionId;
+        if (appBaseUrl == null || appBaseUrl.isBlank()) {
+            return "";  // 留空：前端在展示时用 window.location.origin 兜底，避免泄漏部署地址
+        }
+        return appBaseUrl.replaceAll("/$", "") + "/ide?questionId=" + questionId;
     }
 
     /**
@@ -327,7 +330,8 @@ public class InterviewAgentWithToolsService {
         if (cleanText.endsWith(": ") || cleanText.endsWith("： ") || cleanText.endsWith(":") || cleanText.endsWith("：")) {
             cleanText = cleanText.replaceFirst("[：:]\\s*$", "").trim();
         }
-        cleanText = cleanText.trim().replaceAll("\\s+", " ");
+        // 仅压缩多余空格、保留换行，避免把 Markdown 换行压成一行导致前端无法分段
+        cleanText = cleanText.trim().replaceAll(" {2,}", " ").replaceAll("\\n{3,}", "\n\n");
 
         // ========== 第三步：完美重建（仅用我们提取的 title/url 拼接） ==========
         if (validUrl != null && !validUrl.isEmpty()) {

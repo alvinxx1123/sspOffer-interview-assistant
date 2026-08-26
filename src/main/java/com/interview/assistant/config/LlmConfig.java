@@ -1,118 +1,177 @@
 package com.interview.assistant.config;
 
+import dev.langchain4j.agent.tool.ToolSpecification;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.model.StreamingResponseHandler;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
-import org.springframework.beans.factory.annotation.Value;
+import dev.langchain4j.model.output.Response;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
 import java.time.Duration;
+import java.util.List;
+import java.util.function.Supplier;
 
 /**
- * 使用智谱 GLM（OpenAI 兼容 API）
- * 智谱 API: https://open.bigmodel.cn/api/paas/v4
+ * 大模型 Provider（OpenAI 兼容协议）。
+ * 全部通过 ModelConfigHolder 读取 apiKey/baseUrl/model，支持运行时切换；未配置则启动失败。
+ * 包装器在配置版本变化时自动重建底层 OpenAiChatModel，调用方无感知。
+ *
+ * 角色（温度/maxTokens 差异化，模型名可单独覆盖，否则用基础模型）：
+ * - primary：通用对话/出题兜底
+ * - questionChatModel：出题（更大 maxTokens）
+ * - questionStreamingChatModel：出题 SSE 流式
+ * - interviewChatModel：面试对话（更高 maxTokens 防截断）
+ * - replayChatModel：复盘（更低温度）
  */
 @Configuration
 public class LlmConfig {
 
-    @Value("${zhipu.apiKey:}")
-    private String apiKey;
-
-    @Value("${zhipu.model:glm-4-flash}")
-    private String model;
-
-    @Value("${zhipu.questionModel:}")
-    private String questionModel;
-
-    @Value("${zhipu.chatModel:glm-4-flash}")
-    private String chatModel;
-
-    /** 复盘专用：纯文本分析，必须用 flash 等快速模型，不要用 glm-4.6v 等多模态模型 */
-    @Value("${zhipu.replayModel:glm-4-flash}")
-    private String replayModel;
-
-    private static final String ZHIPU_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
+    private static final Logger log = LoggerFactory.getLogger(LlmConfig.class);
+    private static final Duration TIMEOUT = Duration.ofMinutes(2);
 
     @Bean
     @Primary
-    public ChatLanguageModel chatLanguageModel() {
-        String key = (apiKey != null && !apiKey.isEmpty()) ? apiKey : System.getenv("ZHIPU_API_KEY");
-        if (key == null || key.isEmpty()) {
-            throw new IllegalStateException(
-                "智谱 API Key 未配置。请设置环境变量 ZHIPU_API_KEY 或在 application.yml 中配置 zhipu.api-key");
-        }
-        return OpenAiChatModel.builder()
-                .baseUrl(ZHIPU_BASE_URL)
-                .apiKey(key)
-                .modelName(model)
-                .temperature(0.7)
-                .maxTokens(2048)
-                .timeout(Duration.ofMinutes(2))
-                .build();
+    public ChatLanguageModel chatLanguageModel(ModelConfigHolder holder) {
+        return new DynamicChatModel(holder, () -> holder.getLlmModel(), 0.7, 2048, "primary");
     }
 
-    /** 深挖问题生成专用：可用更快的 flash 模型提速（questionModel 未配置则返回主模型） */
     @Bean("questionChatModel")
-    public ChatLanguageModel questionChatModel(ChatLanguageModel chatLanguageModel) {
-        String qModel = (questionModel != null && !questionModel.isBlank()) ? questionModel : model;
-        if (qModel.equals(model)) {
-            return chatLanguageModel;
-        }
-        String key = (apiKey != null && !apiKey.isEmpty()) ? apiKey : System.getenv("ZHIPU_API_KEY");
-        return OpenAiChatModel.builder()
-                .baseUrl(ZHIPU_BASE_URL)
-                .apiKey(key)
-                .modelName(qModel)
-                .temperature(0.7)
-                .maxTokens(8192)
-                .timeout(Duration.ofMinutes(2))
-                .build();
+    public ChatLanguageModel questionChatModel(ModelConfigHolder holder) {
+        return new DynamicChatModel(holder, holder::getQuestionModel, 0.7, 8192, "question");
     }
 
     @Bean("questionStreamingChatModel")
-    public StreamingChatLanguageModel questionStreamingChatModel() {
-        String qModel = (questionModel != null && !questionModel.isBlank()) ? questionModel : model;
-        String key = (apiKey != null && !apiKey.isEmpty()) ? apiKey : System.getenv("ZHIPU_API_KEY");
-        return OpenAiStreamingChatModel.builder()
-                .baseUrl(ZHIPU_BASE_URL)
-                .apiKey(key)
-                .modelName(qModel)
-                .temperature(0.7)
-                .maxTokens(8192)
-                .timeout(Duration.ofMinutes(2))
-                .build();
+    public StreamingChatLanguageModel questionStreamingChatModel(ModelConfigHolder holder) {
+        return new DynamicStreamingChatModel(holder, holder::getQuestionModel, 0.7, 8192, "question-stream");
     }
 
-    /** 面试对话专用：快速模型 + 更高 maxTokens 避免截断 */
     @Bean("interviewChatModel")
-    public ChatLanguageModel interviewChatModel() {
-        String key = (apiKey != null && !apiKey.isEmpty()) ? apiKey : System.getenv("ZHIPU_API_KEY");
-        String cm = (chatModel != null && !chatModel.isBlank()) ? chatModel : "glm-4-flash";
-        return OpenAiChatModel.builder()
-                .baseUrl(ZHIPU_BASE_URL)
-                .apiKey(key)
-                .modelName(cm)
-                .temperature(0.7)
-                .maxTokens(4096)
-                .timeout(Duration.ofMinutes(2))
-                .build();
+    public ChatLanguageModel interviewChatModel(ModelConfigHolder holder) {
+        return new DynamicChatModel(holder, holder::getChatModel, 0.7, 4096, "chat");
     }
 
-    /** 面试复盘专用：纯文本分析，固定用 glm-4-flash 等快速模型（不用主 model，主 model 可能是 glm-4.6v 等多模态慢模型） */
     @Bean("replayChatModel")
-    public ChatLanguageModel replayChatModel() {
-        String key = (apiKey != null && !apiKey.isEmpty()) ? apiKey : System.getenv("ZHIPU_API_KEY");
-        String rm = (replayModel != null && !replayModel.isBlank()) ? replayModel : "glm-4-flash";
-        return OpenAiChatModel.builder()
-                .baseUrl(ZHIPU_BASE_URL)
-                .apiKey(key)
-                .modelName(rm)
-                .temperature(0.5)
-                .maxTokens(8192)
-                .timeout(Duration.ofMinutes(2))
-                .build();
+    public ChatLanguageModel replayChatModel(ModelConfigHolder holder) {
+        return new DynamicChatModel(holder, holder::getReplayModel, 0.5, 8192, "replay");
+    }
+
+    /** 动态 ChatLanguageModel：持有底层模型快照与对应配置版本，版本变化时重建。 */
+    static class DynamicChatModel implements ChatLanguageModel {
+        private final ModelConfigHolder holder;
+        private final Supplier<String> modelSupplier;
+        private final double temperature;
+        private final int maxTokens;
+        private final String role;
+
+        private volatile ChatLanguageModel delegate;
+        private volatile long builtVersion = -1;
+
+        DynamicChatModel(ModelConfigHolder holder, Supplier<String> modelSupplier,
+                         double temperature, int maxTokens, String role) {
+            this.holder = holder;
+            this.modelSupplier = modelSupplier;
+            this.temperature = temperature;
+            this.maxTokens = maxTokens;
+            this.role = role;
+        }
+
+        @Override
+        public Response<AiMessage> generate(List<ChatMessage> messages) {
+            return current().generate(messages);
+        }
+
+        @Override
+        public Response<AiMessage> generate(List<ChatMessage> messages, List<ToolSpecification> toolSpecifications) {
+            return current().generate(messages, toolSpecifications);
+        }
+
+        @Override
+        public Response<AiMessage> generate(List<ChatMessage> messages, ToolSpecification toolSpecification) {
+            return current().generate(messages, toolSpecification);
+        }
+
+        private ChatLanguageModel current() {
+            long v = holder.getLlmVersion();
+            ChatLanguageModel d = delegate;
+            if (d != null && v == builtVersion) return d;
+            synchronized (this) {
+                if (delegate != null && holder.getLlmVersion() == builtVersion) return delegate;
+                ensureConfigured();
+                delegate = OpenAiChatModel.builder()
+                        .baseUrl(holder.getLlmBaseUrl())
+                        .apiKey(holder.getLlmApiKey())
+                        .modelName(modelSupplier.get())
+                        .temperature(temperature)
+                        .maxTokens(maxTokens)
+                        .timeout(TIMEOUT)
+                        .build();
+                builtVersion = holder.getLlmVersion();
+                log.info("重建 LLM 模型[{}] model={}", role, modelSupplier.get());
+                return delegate;
+            }
+        }
+
+        private void ensureConfigured() {
+            if (!holder.isLlmConfigured()) {
+                throw new IllegalStateException("LLM API Key 未配置。请设置环境变量 LLM_API_KEY（或 DEEPSEEK_API_KEY），或在前端「设置」页填入。");
+            }
+        }
+    }
+
+    /** 动态 StreamingChatLanguageModel：同上，用于 SSE 流式生成。 */
+    static class DynamicStreamingChatModel implements StreamingChatLanguageModel {
+        private final ModelConfigHolder holder;
+        private final Supplier<String> modelSupplier;
+        private final double temperature;
+        private final int maxTokens;
+        private final String role;
+
+        private volatile StreamingChatLanguageModel delegate;
+        private volatile long builtVersion = -1;
+
+        DynamicStreamingChatModel(ModelConfigHolder holder, Supplier<String> modelSupplier,
+                                  double temperature, int maxTokens, String role) {
+            this.holder = holder;
+            this.modelSupplier = modelSupplier;
+            this.temperature = temperature;
+            this.maxTokens = maxTokens;
+            this.role = role;
+        }
+
+        @Override
+        public void generate(List<ChatMessage> messages, StreamingResponseHandler<AiMessage> handler) {
+            current().generate(messages, handler);
+        }
+
+        private StreamingChatLanguageModel current() {
+            long v = holder.getLlmVersion();
+            StreamingChatLanguageModel d = delegate;
+            if (d != null && v == builtVersion) return d;
+            synchronized (this) {
+                if (delegate != null && holder.getLlmVersion() == builtVersion) return delegate;
+                if (!holder.isLlmConfigured()) {
+                    throw new IllegalStateException("LLM API Key 未配置。请设置环境变量 LLM_API_KEY（或 DEEPSEEK_API_KEY），或在前端「设置」页填入。");
+                }
+                delegate = OpenAiStreamingChatModel.builder()
+                        .baseUrl(holder.getLlmBaseUrl())
+                        .apiKey(holder.getLlmApiKey())
+                        .modelName(modelSupplier.get())
+                        .temperature(temperature)
+                        .maxTokens(maxTokens)
+                        .timeout(TIMEOUT)
+                        .build();
+                builtVersion = holder.getLlmVersion();
+                log.info("重建 Streaming LLM 模型[{}] model={}", role, modelSupplier.get());
+                return delegate;
+            }
+        }
     }
 }

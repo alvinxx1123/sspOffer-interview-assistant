@@ -1,0 +1,128 @@
+name: Build & Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: --mac
+            artifact: sspoffer-mac.dmg
+          - os: windows-latest
+            platform: --win
+            artifact: sspoffer-win.exe
+          - os: ubuntu-latest
+            platform: --linux
+            artifact: sspoffer-linux.AppImage
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13'
+          cache: 'npm'
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build Spring Boot jar
+        run: mvn -B -ntp package -DskipTests
+
+      - name: jlink JRE
+        shell: bash
+        run: |
+          mkdir -p electron/build/jre
+          case "${{ matrix.os }}" in
+            macos-latest) MODS="$JAVA_HOME/Contents/Home/jmods" ;;
+            windows-latest|ubuntu-latest) MODS="$JAVA_HOME/jmods" ;;
+          esac
+          jlink --module-path "$MODS" \
+            --add-modules java.base,java.logging,java.sql,java.naming,java.management,java.security.jgss,java.desktop,jdk.crypto.ec,java.net.http,jdk.httpserver,jdk.unsupported \
+            --output electron/build/jre \
+            --strip-debug --no-man-pages --compress=2
+
+      - name: Install Electron deps
+        working-directory: electron
+        run: npm ci
+
+      - name: Build Electron
+        working-directory: electron
+        run: npx electron-vite build
+
+      - name: Package Electron
+        working-directory: electron
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'  # 暂不签名
+        run: npx electron-builder ${{ matrix.platform }} --publish never
+
+      - name: Upload .app/.exe/.AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: electron/dist/${{ matrix.artifact }}
+          if-no-files-found: error
+
+  release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Rename artifacts
+        run: |
+          cd dist
+          [ -f sspoffer-mac.dmg ] && mv sspoffer-mac.dmg sspoffer-${{ github.ref_name }}-mac.dmg || true
+          [ -f sspoffer-win.exe ] && mv sspoffer-win.exe sspoffer-Setup-${{ github.ref_name }}.exe || true
+          [ -f sspoffer-linux.AppImage ] && mv sspoffer-linux.AppImage sspoffer-${{ github.ref_name }}-linux.AppImage || true
+          ls -la
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.dmg
+            dist/*.exe
+            dist/*.AppImage
+          generate_release_notes: true
+          draft: true
+          body: |
+            ## sspOffer v${{ github.ref_name }}
+
+            ### 下载
+
+            | 平台 | 文件 | 安装方式 |
+            | --- | --- | --- |
+            | macOS (Intel/Apple Silicon) | `sspoffer-${{ github.ref_name }}-mac.dmg` | 下载双击，把 sspOffer.app 拖到 Applications |
+            | Windows (x64) | `sspoffer-Setup-${{ github.ref_name }}.exe` | 下载双击安装（首次会弹 SmartScreen，点"仍要运行"） |
+            | Linux (x64) | `sspoffer-${{ github.ref_name }}-linux.AppImage` | chmod +x 后双击运行 |
+
+            ### 首次启动
+
+            1. 启动后进「设置」配置 AI Provider Key
+            2. 至少配置一个 LLM + 一个视觉模型才能用
+            3. 推荐：DeepSeek + 智谱 GLM-ASR + 智谱/豆包 视觉

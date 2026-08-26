@@ -16,3 +16,20 @@ application-local.yml
 
 frontend/node_modules/
 frontend/dist/
+
+# Electron 本地依赖、构建产物和临时归档
+electron/node_modules/
+electron/out/
+electron/dist/
+electron/*.asar
+electron/*.bak
+electron/*.tmp
+
+# 本地 Codex / OpenAI agents skill 配置（私有，不入仓）
+.agents/
+
+# 本地方案决策草稿 / bug 记录（不入仓）
+huggingface-bug.md
+provider-option2.md
+provider-swap.md
+replay-decision.md

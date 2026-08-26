@@ -1,15 +1,21 @@
-# 复制为 application-local.yml 并填写（已 gitignore，不会被提交）
-# 或使用环境变量 ZHIPU_API_KEY、APP_ADMIN_PASSWORD
+# 复制为 application-local.yml 并填写（该文件已被 .gitignore 忽略），
+# 或使用下方注释中的环境变量。不要在 application.yml 或 Git 中提交真实密钥。
 
-zhipu:
-  apiKey: "你的智谱API_Key"
-  model: glm-4-flash
+# 通用 LLM 配置（OpenAI 兼容接口）
+llm:
+  apiKey: "${LLM_API_KEY:${DEEPSEEK_API_KEY:}}"
+  baseUrl: "${LLM_BASE_URL:https://api.deepseek.com}"
+  model: "${LLM_MODEL:deepseek-v4-flash}"
+
+# RAG Embedding 配置
+embedding:
+  apiKey: "${EMBEDDING_API_KEY:${ZHIPU_API_KEY:}}"
+  baseUrl: "${EMBEDDING_BASE_URL:https://open.bigmodel.cn/api/paas/v4}"
+  model: "${EMBEDDING_MODEL:embedding-3}"
 
 app:
-  admin-password: "你的管理员密码"
-  # 可选：联网搜索算法题原题（力扣/牛客）。推荐 SearchCans：注册送 100 次，国内可用（走 Bing）
+  admin-password: "${APP_ADMIN_PASSWORD:}"
   # algorithm-search:
   #   enabled: true
-  #   provider: "searchcans"   # searchcans（推荐）| bing | serper
-  #   api-key: "你的 SearchCans API Key（官网 API Keys 创建）"
-  #   # serper-api-url 仅 provider=serper 时生效
+  #   provider: "searchcans" # searchcans / bing / serper
+  #   api-key: "${ALGO_SEARCH_API_KEY:}"

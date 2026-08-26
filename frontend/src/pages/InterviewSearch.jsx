@@ -37,10 +37,34 @@ export default function InterviewSearch() {
 
   const parseToList = (s) => {
     if (!s) return []
+    // 优先尝试 JSON 数组；JSON 解析失败时，把多行字符串按 \n 拆分
     try {
-      const v = typeof s === 'string' ? JSON.parse(s) : s
-      return Array.isArray(v) ? v.filter(Boolean).map(String) : (String(s).trim() ? [String(s)] : [])
-    } catch { return String(s).trim() ? [String(s)] : [] }
+      const v = JSON.parse(s)
+      if (Array.isArray(v)) return v.filter(Boolean).map(String)
+      if (v != null) return [String(v)]
+    } catch {
+      const str = String(s).trim()
+      if (!str) return []
+      return str.split(/\n+/).map(x => x.trim()).filter(Boolean)
+    }
+    return []
+  }
+
+  // 匹配纯【xxx】分块标题行（无题目正文）
+  const BAGU_CATEGORY_LINE = /^【[^【】]+】\s*$/
+  // 匹配【xxx】题目正文前缀
+  const BAGU_LINE_PREFIX = /^【([^【】]+)】\s*(.*)$/
+  const isBaguCategoryLine = (line) => BAGU_CATEGORY_LINE.test((line || '').trim())
+  const parseBaguLine = (line) => {
+    const t = (line || '').trim()
+    const m = t.match(BAGU_LINE_PREFIX)
+    if (!m) return { category: null, text: t }
+    return { category: m[1].trim(), text: m[2].trim() }
+  }
+  // 计算真实题数（过滤掉纯分块标题行），用于「八股 N 题」展示与详情页 index
+  const countRealBaguQuestions = (s) => {
+    if (!s) return 0
+    return parseToList(s).filter(l => !isBaguCategoryLine(l)).length
   }
 
   const truncate = (str, len = 80) => {
@@ -205,8 +229,10 @@ export default function InterviewSearch() {
     setUploadMsg('')
     try {
       const validBagu = editBaguQA.filter(x => x.q?.trim())
+      // 保存时仅保留真实题目（跳过纯【xxx】分块标题行），答案数组一一对应
+      const realBagu = validBagu.filter(x => !isBaguCategoryLine(x.q))
       const baguQ = validBagu.map(x => x.q.trim())
-      const baguA = validBagu.map(x => x.a || '')
+      const baguA = realBagu.map(x => x.a || '')
       const validI = editInternshipQA.filter(x => x.q?.trim())
       const internshipQ = validI.map(x => x.q.trim())
       const internshipA = validI.map(x => x.a || '')
@@ -214,8 +240,10 @@ export default function InterviewSearch() {
       const projectQ = validP.map(x => x.q.trim())
       const projectA = validP.map(x => x.a || '')
       const validAlgo = editAlgorithmQA.filter(x => x.q?.trim())
+      // 保存时跳过纯【xxx】分块标题行，确保链接数组与真实题目一一对齐
+      const realAlgo = validAlgo.filter(x => !isBaguCategoryLine(x.q))
       const algoQ = validAlgo.map(x => x.q.trim())
-      const algoLinks = validAlgo.map(x => x.link?.trim() || '')
+      const algoLinks = realAlgo.map(x => x.link?.trim() || '')
       const exp = {
         ...editingExp,
         baguQuestions: baguQ.length ? JSON.stringify(baguQ) : (editingExp.baguQuestions || null),
@@ -343,6 +371,11 @@ export default function InterviewSearch() {
           </div>
 
           <div className="form-group">
+            <label>大模型/AI 相关问题</label>
+            <textarea value={form.llmQuestions} onChange={e => setForm({ ...form, llmQuestions: e.target.value })} rows={2} placeholder="AI/大模型/Agent/RAG/MCP/Tool Calling 等相关题目" />
+          </div>
+
+          <div className="form-group">
             <label>算法题（可多条，每条可填原题链接）</label>
             {(form.algorithmItems || [{ q: '', link: '' }]).map((item, i) => (
               <div key={i} className="algo-multi-row">
@@ -446,8 +479,8 @@ export default function InterviewSearch() {
               </div>
               <p className="exp-preview">{truncate(e.content || e.projectExperience || '暂无概要', 100)}</p>
               <div className="exp-tags-row">
-                {parseToList(e.baguQuestions).length > 0 && (
-                  <span className="exp-tag">八股 {parseToList(e.baguQuestions).length} 题</span>
+                {countRealBaguQuestions(e.baguQuestions) > 0 && (
+                  <span className="exp-tag">八股 {countRealBaguQuestions(e.baguQuestions)} 题</span>
                 )}
                 {parseToList(e.algorithmQuestions).length > 0 && (
                   <span className="exp-tag algo">算法 {parseToList(e.algorithmQuestions).length} 题</span>
@@ -554,14 +587,33 @@ export default function InterviewSearch() {
                   <h4>八股题目 {editingExp && <span className="exp-edit-hint">（可填写答案）</span>}</h4>
                   {editingExp ? (
                     <div className="bagu-qa-edit">
-                      {editBaguQA.map((item, i) => (
+                      {editBaguQA.map((item, i) => {
+                        const isCat = isBaguCategoryLine(item.q)
+                        if (isCat) {
+                          const { category } = parseBaguLine(item.q)
+                          return (
+                            <div key={i} className="bagu-qa-item bagu-qa-item-category">
+                              <div className="bagu-qa-q">
+                                <label>分类</label>
+                                <input
+                                  value={item.q}
+                                  onChange={e => updateBaguQA(i, 'q', e.target.value)}
+                                  placeholder="【分块名】，例如【数据库】"
+                                />
+                              </div>
+                              <button type="button" className="bagu-qa-remove" onClick={() => removeBaguQA(i)}>删除</button>
+                            </div>
+                          )
+                        }
+                        const { category, text } = parseBaguLine(item.q)
+                        return (
                         <div key={i} className="bagu-qa-item">
                           <div className="bagu-qa-q">
                             <label>题目 {i + 1}</label>
                             <input
                               value={item.q}
                               onChange={e => updateBaguQA(i, 'q', e.target.value)}
-                              placeholder="八股题目"
+                              placeholder={category ? `【${category}】原题正文` : '八股题目'}
                             />
                           </div>
                           <div className="bagu-qa-a">
@@ -575,21 +627,49 @@ export default function InterviewSearch() {
                           </div>
                           <button type="button" className="bagu-qa-remove" onClick={() => removeBaguQA(i)}>删除</button>
                         </div>
-                      ))}
+                        )
+                      })}
                       <button type="button" className="btn-link" onClick={addBaguQA}>+ 添加八股题</button>
+                      <button type="button" className="btn-link" style={{ marginLeft: 8 }} onClick={() => setEditBaguQA(prev => [...prev, { q: '【新分块】', a: '' }])}>+ 添加分块</button>
                     </div>
                   ) : (
                     <div className="bagu-qa-view">
-                      {parseToList(selectedExp.baguQuestions).map((q, i) => {
+                      {(() => {
+                        const lines = parseToList(selectedExp.baguQuestions)
                         const answers = parseToList(selectedExp.baguAnswers)
-                        const ans = answers[i]
-                        return (
-                          <div key={i} className="bagu-qa-row">
-                            <div className="bagu-q">{q}</div>
-                            {ans && <div className="bagu-a">{ans}</div>}
-                          </div>
-                        )
-                      })}
+                        // 仅对真实题目行做答案索引（跳过纯【xxx】分块标题行）
+                        const realIdxOf = (() => {
+                          const map = new Map()
+                          let real = -1
+                          for (let li = 0; li < lines.length; li++) {
+                            if (isBaguCategoryLine(lines[li])) { map.set(li, -1); continue }
+                            real++
+                            map.set(li, real)
+                          }
+                          return map
+                        })()
+                        return lines.map((q, i) => {
+                          if (isBaguCategoryLine(q)) {
+                            const cat = q.replace(/^[【]|[】]\s*$/g, '')
+                            return (
+                              <div key={`cat-${i}`} className="bagu-q-category">
+                                <span className="bagu-q-cat-label">{cat}</span>
+                              </div>
+                            )
+                          }
+                          const { category, text } = parseBaguLine(q)
+                          const ans = answers[realIdxOf.get(i)] ?? ''
+                          return (
+                            <div key={i} className="bagu-qa-row">
+                              <div className="bagu-q">
+                                {category && <span className="bagu-q-cat-inline">【{category}】</span>}
+                                {text || q}
+                              </div>
+                              {ans && <div className="bagu-a">{ans}</div>}
+                            </div>
+                          )
+                        })
+                      })()}
                     </div>
                   )}
                 </section>
@@ -598,9 +678,18 @@ export default function InterviewSearch() {
                 <section className="exp-section">
                   <h4>大模型相关</h4>
                   <div className="exp-tags">
-                    {parseToList(selectedExp.llmQuestions).map((q, i) => (
-                      <span key={i} className="exp-detail-tag llm">{q}</span>
-                    ))}
+                    {parseToList(selectedExp.llmQuestions).map((q, i) => {
+                      if (isBaguCategoryLine(q)) {
+                        return <span key={`cat-${i}`} className="bagu-q-category"><span className="bagu-q-cat-label">{parseBaguLine(q).category}</span></span>
+                      }
+                      const { category, text } = parseBaguLine(q)
+                      return (
+                        <span key={i} className="exp-detail-tag llm">
+                          {category && <span className="bagu-q-cat-inline">{`【${category}】`}</span>}
+                          {text || q}
+                        </span>
+                      )
+                    })}
                   </div>
                 </section>
               )}
@@ -609,11 +698,29 @@ export default function InterviewSearch() {
                   <h4>算法题 {editingExp ? <span className="exp-edit-hint">（可填原题链接）</span> : (parseToList(selectedExp.algorithmLinks).some((l, i) => l) || selectedExp.algorithmLink) && <span className="exp-edit-hint">（点击跳转原题）</span>}</h4>
                   {editingExp ? (
                     <div className="bagu-qa-edit">
-                      {editAlgorithmQA.map((item, i) => (
+                      {editAlgorithmQA.map((item, i) => {
+                        const isCat = isBaguCategoryLine(item.q)
+                        if (isCat) {
+                          return (
+                            <div key={i} className="bagu-qa-item bagu-qa-item-category">
+                              <div className="bagu-qa-q">
+                                <label>分类</label>
+                                <input
+                                  value={item.q}
+                                  onChange={e => updateQA(setEditAlgorithmQA, i, 'q', e.target.value)}
+                                  placeholder="【分块名】，例如【手撕算法】"
+                                />
+                              </div>
+                              <button type="button" className="bagu-qa-remove" onClick={() => removeQA(setEditAlgorithmQA, i)}>删除</button>
+                            </div>
+                          )
+                        }
+                        const { category, text } = parseBaguLine(item.q)
+                        return (
                         <div key={i} className="bagu-qa-item">
                           <div className="bagu-qa-q">
                             <label>算法题 {i + 1}</label>
-                            <input value={item.q} onChange={e => updateQA(setEditAlgorithmQA, i, 'q', e.target.value)} placeholder="算法题描述" />
+                            <input value={item.q} onChange={e => updateQA(setEditAlgorithmQA, i, 'q', e.target.value)} placeholder={category ? `【${category}】原题正文` : '算法题描述'} />
                           </div>
                           <div className="bagu-qa-a">
                             <label>原题链接</label>
@@ -621,22 +728,48 @@ export default function InterviewSearch() {
                           </div>
                           <button type="button" className="bagu-qa-remove" onClick={() => removeQA(setEditAlgorithmQA, i)}>删除</button>
                         </div>
-                      ))}
+                        )
+                      })}
                       <button type="button" className="btn-link" onClick={() => addQA(setEditAlgorithmQA)}>+ 添加算法题</button>
+                      <button type="button" className="btn-link" style={{ marginLeft: 8 }} onClick={() => setEditAlgorithmQA(prev => [...prev, { q: '【新分块】', link: '' }])}>+ 添加分块</button>
                     </div>
                   ) : (
                     <div className="exp-tags">
-                      {parseToList(selectedExp.algorithmQuestions).map((q, i) => {
+                      {(() => {
+                        const qs = parseToList(selectedExp.algorithmQuestions)
                         const links = parseToList(selectedExp.algorithmLinks)
-                        const url = links[i] || selectedExp.algorithmLink
+                        // 仅对真实题目行做链接索引（跳过纯【xxx】分块标题行）
+                        const realIdxOf = (() => {
+                          const map = new Map()
+                          let real = -1
+                          for (let li = 0; li < qs.length; li++) {
+                            if (isBaguCategoryLine(qs[li])) { map.set(li, -1); continue }
+                            real++
+                            map.set(li, real)
+                          }
+                          return map
+                        })()
+                        return qs.map((q, i) => {
+                        if (isBaguCategoryLine(q)) {
+                          return <span key={`cat-${i}`} className="bagu-q-category"><span className="bagu-q-cat-label">{parseBaguLine(q).category}</span></span>
+                        }
+                        const url = links[realIdxOf.get(i)] || selectedExp.algorithmLink
+                        const { category, text } = parseBaguLine(q)
+                        const algoTag = (
+                          <>
+                            {category && <span className="bagu-q-cat-inline">{`【${category}】`}</span>}
+                            {text || q}
+                          </>
+                        )
                         return url ? (
                           <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="exp-detail-tag algo exp-algo-tag">
-                            {q} ↗
+                            {algoTag} ↗
                           </a>
                         ) : (
-                          <span key={i} className="exp-detail-tag algo">{q}</span>
+                          <span key={i} className="exp-detail-tag algo">{algoTag}</span>
                         )
-                      })}
+                        })
+                      })()}
                     </div>
                   )}
                   {!editingExp && (parseToList(selectedExp.algorithmLinks).some(l => l) || selectedExp.algorithmLink) && (

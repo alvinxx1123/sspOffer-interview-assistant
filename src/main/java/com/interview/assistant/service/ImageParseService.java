@@ -10,6 +10,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
+import com.interview.assistant.config.ModelConfigHolder;
 
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
@@ -27,23 +28,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 图片面经解析：上传图片，调用智谱 GLM-4V 视觉模型提取 实习经历、项目经历、八股、算法 等
+ * 图片面经解析：上传图片，调用 DeepSeek 视觉模型提取 实习经历、项目经历、八股、算法 等
  */
 @Service
 public class ImageParseService {
 
     private static final Logger log = LoggerFactory.getLogger(ImageParseService.class);
-    private static final String ZHIPU_VISION_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
 
-    @Value("${zhipu.apiKey:}")
-    private String apiKey;
-
-    @Value("${zhipu.visionModel:glm-4v-plus}")
-    private String visionModel;
-
-    @Value("${zhipu.visionFallbackModels:glm-4.6v}")
-    private String visionFallbackModels;
-
+    private final ModelConfigHolder modelConfigHolder;
     private final ExperienceCleaningCapability experienceCleaningCapability;
     private final SkillPackService skillPackService;
     private final RestTemplate restTemplate = new RestTemplate();
@@ -71,16 +63,18 @@ public class ImageParseService {
         只返回 JSON，不要其他说明。
         """;
 
-    public ImageParseService(ExperienceCleaningCapability experienceCleaningCapability,
+    public ImageParseService(ModelConfigHolder modelConfigHolder,
+                             ExperienceCleaningCapability experienceCleaningCapability,
                              SkillPackService skillPackService) {
+        this.modelConfigHolder = modelConfigHolder;
         this.experienceCleaningCapability = experienceCleaningCapability;
         this.skillPackService = skillPackService;
     }
 
     public Map<String, Object> parseImage(MultipartFile image) {
-        String key = (apiKey != null && !apiKey.isEmpty()) ? apiKey : System.getenv("ZHIPU_API_KEY");
+        String key = modelConfigHolder.getLlmApiKey();
         if (key == null || key.isEmpty()) {
-            throw new IllegalStateException("智谱 API Key 未配置，无法解析图片");
+            throw new IllegalStateException("LLM API Key 未配置，无法解析图片");
         }
         try {
             PreparedImage preparedImage = prepareImageForVision(image);
@@ -111,14 +105,14 @@ public class ImageParseService {
 
                     HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
                     ResponseEntity<String> resp = restTemplate.exchange(
-                            ZHIPU_VISION_URL,
+                            modelConfigHolder.getLlmBaseUrl() + "/chat/completions",
                             HttpMethod.POST,
                             entity,
                             String.class
                     );
 
                     if (resp.getStatusCode().isError()) {
-                        throw new RuntimeException("智谱 API 调用失败: " + resp.getStatusCode());
+                        throw new RuntimeException("DeepSeek API 调用失败: " + resp.getStatusCode());
                     }
 
                     JsonNode root = objectMapper.readTree(resp.getBody());
@@ -189,17 +183,7 @@ public class ImageParseService {
 
     private List<String> buildVisionModelCandidates() {
         List<String> models = new ArrayList<>();
-        if (visionModel != null && !visionModel.isBlank()) {
-            models.add(visionModel.trim());
-        }
-        if (visionFallbackModels != null && !visionFallbackModels.isBlank()) {
-            for (String model : visionFallbackModels.split(",")) {
-                String trimmed = model.trim();
-                if (!trimmed.isEmpty() && !models.contains(trimmed)) {
-                    models.add(trimmed);
-                }
-            }
-        }
+        models.add(modelConfigHolder.getVisionModel());
         return models;
     }
 

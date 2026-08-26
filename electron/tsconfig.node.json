@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": null,
+    "composite": true
+  },
+  "include": ["src/main/**/*", "src/preload/**/*", "src/shared/**/*", "src/core/**/*", "electron.vite.config.ts"]
+}

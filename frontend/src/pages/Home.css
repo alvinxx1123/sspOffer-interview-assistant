@@ -1,5 +1,4 @@
 .home {
-  text-align: center;
   position: relative;
   min-height: 60vh;
 }
@@ -28,6 +27,7 @@
 .hero {
   position: relative;
   z-index: 1;
+  text-align: center;
   margin-bottom: 56px;
   animation: fadeUp 0.8s ease-out;
 }
@@ -40,14 +40,8 @@
 }
 
 @keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .hero h1 {
@@ -61,22 +55,69 @@
 .hero-sub {
   color: var(--text-secondary);
   font-size: 1.05rem;
-  max-width: 560px;
+  max-width: 620px;
   margin: 0 auto;
   line-height: 1.7;
 }
 
-.features {
+/* 阶段分区 */
+.phase {
   position: relative;
   z-index: 1;
+  margin-bottom: 48px;
+  animation: fadeUp 0.6s ease-out backwards;
+}
+
+.phase-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.phase-label {
+  flex: 0 0 auto;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  border-radius: 8px;
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+.phase-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.phase-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.phase-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.features {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 24px;
 }
 
 .feature-card {
   display: block;
-  padding: 28px 24px;
+  padding: 24px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -84,13 +125,8 @@
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
-  animation: fadeUp 0.6s ease-out backwards;
+  animation: fadeUp 0.5s ease-out backwards;
 }
-
-.feature-card:nth-child(1) { animation-delay: 0.1s; }
-.feature-card:nth-child(2) { animation-delay: 0.2s; }
-.feature-card:nth-child(3) { animation-delay: 0.3s; }
-.feature-card:nth-child(4) { animation-delay: 0.4s; }
 
 .feature-card::before {
   content: '';
@@ -116,23 +152,32 @@
   opacity: 1;
 }
 
-.feature-card h3 {
-  margin-bottom: 10px;
-  font-size: 1.15rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  transition: color 0.2s;
+.feature-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
 }
 
-.feature-card:hover h3 {
-  color: var(--accent);
+.feature-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  font-size: 22px;
+  background: rgba(129, 140, 248, 0.12);
+  border-radius: 12px;
+  transition: transform 0.3s, background 0.3s;
 }
 
-.feature-card p {
-  color: var(--text-secondary);
-  font-size: 14px;
-  margin-bottom: 16px;
-  line-height: 1.6;
+[data-theme="light"] .feature-icon {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.feature-card:hover .feature-icon {
+  transform: scale(1.08);
+  background: rgba(129, 140, 248, 0.2);
 }
 
 .feature-card .arrow {
@@ -156,4 +201,73 @@
   background: var(--accent);
   color: #fff;
   transform: translateX(4px);
+}
+
+.feature-card h3 {
+  margin-bottom: 8px;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: color 0.2s;
+}
+
+.feature-card:hover h3 {
+  color: var(--accent);
+}
+
+.feature-card p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* 页脚 */
+.home-footer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: all 0.3s;
+}
+
+.settings-link:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  text-decoration: none;
+}
+
+.home-tip {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 560px) {
+  .phase-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .home-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }

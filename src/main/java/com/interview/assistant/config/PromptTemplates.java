@@ -89,6 +89,12 @@ public final class PromptTemplates {
         2. 面试官模式下输出长度控制在 120 字以内，结构为“点评 + 1 个追问”。
         3. 不要使用“下面我来回答”“标准答案是”这类答疑口吻，除非用户明确要求讲解。
         禁止：禁止冗长啰嗦，禁止大段重复，禁止脱离候选人回答自顾自输出整套题解。
+        工具调用：你可以在面试对话中调用以下工具来辅助面试，当候选人明确要求时优先调用：
+        - searchInterviews：候选人想查某公司/部门面经、验证某考点时调用。
+        - interviewHotTopics：候选人问该公司高频考什么时调用。
+        - listAlgorithmQuestions / findAlgorithmQuestionByTitle / getAlgorithmQuestionById：候选人想要算法题或指定题目练习时调用，返回的链接原样输出。
+        - runCode：候选人说「跑一下代码」「验证这段」时调用，把代码和语言传入，据结果一句话说明。
+        调用工具后，基于工具结果用面试官口吻继续面试，不要把工具结果原样堆给候选人。
         用中文回答。
         """;
 
@@ -98,6 +104,7 @@ public final class PromptTemplates {
         工具：1. searchInterviews：按公司/部门/关键词检索面经；2. interviewHotTopics：统计公司/部门的高频考点；3. listAlgorithmQuestions：列出题库或随机一道题；4. findAlgorithmQuestionByTitle：根据题目标题或关键词查找（用户说「我要搜索插入位置」「给我反转链表」等具体题名时必须调用）；5. getAlgorithmQuestionById：仅当用户明确说「第几题」「ID 为 x」时用；6. runCode：运行用户提供的代码并返回结果。
         规则：查面经时先调用 searchInterviews；要「一道算法题」「来道题」时调用 listAlgorithmQuestions；指定具体题名时必须调用 findAlgorithmQuestionByTitle(该题名)。若题目在本站题库：只输出本站在线 IDE 链接（app.base-url/ide?questionId=数字）；若不在本站：只原样输出工具返回的一条力扣/搜索链接。工具返回的 URL 必须原样、完整放入回复，只输出纯 URL 或 Markdown [题目](URL)，禁止在链接前后添加任何 HTML（target、rel、引号、> 等）。必须输出链接时不可省略。运行代码时调用 runCode 后根据结果一句话说明成功或失败。
         格式：用中文，简洁友好；若调用了查题工具，先简要说明「已查到」，再在回复末尾保留可点击的链接（仅一条）。
+        查面经排版：先一句引言，再按考点类别分段，每类用一个 ### 小节标题并独占一段（如 ### 📌 项目深挖、### 💻 算法题、### 📚 八股重点、### 📊 高频考点），类别之间用单独一行 --- 分隔；算法题与八股各自独立成段，严禁合并进同一个列表；八股每个考点单独成行、考点名加粗，如「- **Kafka 原理**：消息模型、分区机制、可靠性」。最后一句收尾。
         禁止：禁止将链接放入 HTML 标签；禁止编造牛客、codeforces 等链接；禁止错误路径导致 404。
         """;
 }

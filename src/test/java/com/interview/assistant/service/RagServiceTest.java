@@ -1,9 +1,10 @@
 package com.interview.assistant.service;
 
 import com.interview.assistant.config.InterviewEmbeddingStore;
+import com.interview.assistant.config.ModelConfigHolder;
 import com.interview.assistant.entity.InterviewExperience;
 import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 验证「按字段分块 + 结构化检索」RAG 流程：索引后能按类型（实习/项目/八股/算法）返回聚合结果。
- * 不依赖智谱 API，使用本地 AllMiniLM + 内存 Store。
+ *
+ * <p>不依赖智谱 API、不依赖 ai.djl.huggingface:tokenizers native 库 — 使用纯 Java 实现的
+ * {@link DeterministicEmbeddingModel} 替身,保证在 Windows / Linux / macOS(Intel 与 Apple Silicon)
+ * 任意架构下都能通过。
  */
 class RagServiceTest {
 
@@ -23,9 +27,14 @@ class RagServiceTest {
 
     @BeforeEach
     void setUp() {
-        AllMiniLmL6V2EmbeddingModel embeddingModel = new AllMiniLmL6V2EmbeddingModel();
+        EmbeddingModel embeddingModel = new DeterministicEmbeddingModel();
         store = new InterviewEmbeddingStore();
-        ragService = new RagService(embeddingModel, store);
+        // 测试用 holder 替身：isEmbeddingConfigured() 始终返回 true，保证走完整 RAG 流程
+        ModelConfigHolder holder = new ModelConfigHolder() {
+            @Override
+            public boolean isEmbeddingConfigured() { return true; }
+        };
+        ragService = new RagService(embeddingModel, store, holder);
     }
 
     @Test

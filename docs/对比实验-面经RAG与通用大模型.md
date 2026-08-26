@@ -90,9 +90,9 @@
 
 按顺序执行即可完成「深挖 + 面试对话」两项对比。
 
-1. **配置智谱 API Key**  
-   - 环境变量：`export ZHIPU_API_KEY=你的Key`  
-   - 或在本项目 `src/main/resources/` 下新建 `application-local.yml`，内容：`zhipu:\n  apiKey: "你的Key"`（该文件已在 .gitignore，不会提交）
+1. **配置 DeepSeek API Key**  
+   - 环境变量：`export DEEPSEEK_API_KEY=你的Key`  
+   - 或在本项目 `src/main/resources/` 下新建 `application-local.yml`，内容：`deepseek:\n  apiKey: "你的Key"`（该文件已在 .gitignore，不会提交）
 
 2. **确保本系统有面经可检索**  
    - 启动后端+前端（见 3.1），在「面经搜索」页添加至少一条「字节跳动-基础架构」面经（可直接用附录 A 的内容录入），这样 RAG 才有参考内容。
@@ -125,7 +125,9 @@
 ### 4.1 启动项目
 
 ```bash
-# 终端 1：后端（必须配置智谱 API Key，否则启动报错）
+# 终端 1：后端（必须配置 DeepSeek API Key，否则启动报错）
+export DEEPSEEK_API_KEY=你的DeepSeekAPI_Key
+# 可选：智谱 Embedding（未配置则 RAG 用本地 AllMiniLM）
 export ZHIPU_API_KEY=你的智谱API_Key
 mvn spring-boot:run
 

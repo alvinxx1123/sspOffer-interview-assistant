@@ -5,8 +5,14 @@ import com.interview.assistant.entity.InterviewChatMessage;
 import com.interview.assistant.entity.InterviewChatSession;
 import com.interview.assistant.repository.InterviewChatMessageRepository;
 import com.interview.assistant.repository.InterviewChatSessionRepository;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.agent.tool.ToolSpecification;
+import dev.langchain4j.agent.tool.ToolSpecifications;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
+import dev.langchain4j.service.tool.DefaultToolExecutor;
+import dev.langchain4j.service.tool.ToolExecutor;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
@@ -17,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,6 +43,10 @@ public class InterviewChatService {
     private final InterviewChatMessageRepository messageRepository;
     private final InterviewCoachingService coachingService;
     private final SkillPackService skillPackService;
+    private final InterviewAssistantTools assistantTools;
+
+    /** 工具规格与执行器（Function Calling 并入面试主流程） */
+    private volatile List<ToolSpec> toolSpecs;
 
     /** sessionId -> 会话上下文（含记忆和面试背景） */
     private final Map<String, InterviewSession> sessions = new ConcurrentHashMap<>();
@@ -45,13 +56,36 @@ public class InterviewChatService {
                                InterviewChatSessionRepository sessionRepository,
                                InterviewChatMessageRepository messageRepository,
                                InterviewCoachingService coachingService,
-                               SkillPackService skillPackService) {
+                               SkillPackService skillPackService,
+                               InterviewAssistantTools assistantTools) {
         this.chatModel = chatModel;
         this.ragService = ragService;
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
         this.coachingService = coachingService;
         this.skillPackService = skillPackService;
+        this.assistantTools = assistantTools;
+    }
+
+    private record ToolSpec(ToolSpecification specification, ToolExecutor executor) {}
+
+    /** 懒加载工具规格与执行器：面试官可在对话中调用查面经/查算法题/跑代码等工具 */
+    private List<ToolSpec> getToolSpecs() {
+        if (toolSpecs == null) {
+            synchronized (this) {
+                if (toolSpecs == null) {
+                    List<ToolSpec> list = new ArrayList<>();
+                    for (Method m : InterviewAssistantTools.class.getMethods()) {
+                        if (m.isAnnotationPresent(dev.langchain4j.agent.tool.Tool.class)) {
+                            ToolSpecification spec = ToolSpecifications.toolSpecificationFrom(m);
+                            list.add(new ToolSpec(spec, new DefaultToolExecutor(assistantTools, m)));
+                        }
+                    }
+                    toolSpecs = list;
+                }
+            }
+        }
+        return toolSpecs;
     }
 
     public String chat(String sessionId, String userMessage, String questions, String resume, String company, String department) {
@@ -78,10 +112,36 @@ public class InterviewChatService {
             messages.add(SystemMessage.from(session.systemContext + ragContext));
             messages.addAll(session.memory.messages());
 
-            Response<AiMessage> response = chatModel.generate(messages);
+            // Function Calling 并入主流程：带工具规格调用，模型可请求调用工具
+            List<ToolSpec> specs = getToolSpecs();
+            List<ToolSpecification> toolSpecifications = new ArrayList<>();
+            for (ToolSpec ts : specs) toolSpecifications.add(ts.specification());
+
+            Response<AiMessage> response = chatModel.generate(messages, toolSpecifications);
             AiMessage aiMessage = response.content();
+
+            // 工具执行循环：模型请求调用工具时，执行并把结果回灌，最多 3 轮防死循环
+            int rounds = 0;
+            while (aiMessage.hasToolExecutionRequests() && rounds < 3) {
+                rounds++;
+                messages.add(aiMessage);
+                for (ToolExecutionRequest req : aiMessage.toolExecutionRequests()) {
+                    String toolResult = "";
+                    for (ToolSpec ts : specs) {
+                        if (ts.specification().name().equals(req.name())) {
+                            toolResult = ts.executor().execute(req, sessionId);
+                            break;
+                        }
+                    }
+                    messages.add(ToolExecutionResultMessage.from(req, toolResult));
+                }
+                response = chatModel.generate(messages, toolSpecifications);
+                aiMessage = response.content();
+            }
+
             String text = aiMessage.text();
 
+            // 只把最终的文字回答放进记忆（工具中间过程不入库，避免污染历史）
             session.memory.add(aiMessage);
 
             // 持久化到数据库
